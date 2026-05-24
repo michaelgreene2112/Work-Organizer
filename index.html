@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Work Organizer">
+<meta name="theme-color" content="#0f172a">
+<title>Work Organizer</title>
+
+<!-- PWA Manifest inline -->
+<script>
+const manifestData = {
+  name: "Work Organizer",
+  short_name: "Organizer",
+  start_url: "./",
+  display: "standalone",
+  background_color: "#0f172a",
+  theme_color: "#0f172a",
+  icons: [
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a'/><text y='.9em' font-size='80' x='10'>📋</text></svg>", sizes: "192x192", type: "image/svg+xml" }
+  ]
+};
+const blob = new Blob([JSON.stringify(manifestData)], {type:'application/json'});
+const manifestUrl = URL.createObjectURL(blob);
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = manifestUrl;
+document.head.appendChild(link);
+</script>
+
+<!-- Tabler Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+<style>
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0f172a;
+  --bg2:       #1e293b;
+  --bg3:       #273548;
+  --bg4:       #334155;
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.14);
+  --text:      #f1f5f9;
+  --text2:     #94a3b8;
+  --text3:     #64748b;
+  --accent:    #38bdf8;
+  --accent2:   #0ea5e9;
+  --success:   #34d399;
+  --warning:   #fbbf24;
+  --danger:    #f87171;
+  --purple:    #a78bfa;
+  --teal:      #2dd4bf;
+  --coral:     #fb923c;
+  --radius:    10px;
+  --radius-lg: 14px;
+  --sidebar-w: 220px;
+  --tabbar-h:  64px;
+  --font: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+}
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* ── Layout ───────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100%; }
+.topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.topbar-title { font-size: 16px; font-weight: 600; flex: 1; letter-spacing: -0.01em; }
+.topbar-title span { color: var(--accent); }
+.body { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar (desktop) ───────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 10px 0 20px;
+}
+.sidebar-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text3);
+  padding: 12px 16px 6px;
+}
+.sb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px; cursor: pointer;
+  border-left: 3px solid transparent;
+  font-size: 14px; color: var(--text2);
+  transition: all 0.15s;
+  border-radius: 0;
+}
+.sb-item:hover { background: var(--bg3); color: var(--text); }
+.sb-item.active { background: var(--bg3); color: var(--text); border-left-color: var(--accent); }
+.sb-item .ti { font-size: 16px; flex-shrink: 0; }
+.sb-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-count { font-size: 11px; background: var(--bg4); border-radius: 20px; padding: 1px 7px; color: var(--text3); }
+.sb-add-btn {
+  margin: 10px 12px 0;
+  padding: 7px 12px;
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer; font-size: 12px; color: var(--text3);
+  text-align: left; width: calc(100% - 24px);
+  transition: all 0.15s;
+}
+.sb-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Main content ─────────────────────────────────────────── */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.main-inner { padding: 20px; max-width: 860px; width: 100%; margin: 0 auto; flex: 1; }
+
+/* ── Metrics ──────────────────────────────────────────────── */
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.metric-lbl { font-size: 11px; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.metric-val { font-size: 24px; font-weight: 700; color: var(--text); }
+
+/* ── Section header ───────────────────────────────────────── */
+.sec-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.sec-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.sec-name { font-size: 18px; font-weight: 600; flex: 1; }
+.hdr-btn {
+  padding: 7px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: transparent; cursor: pointer;
+  font-size: 13px; color: var(--text2);
+  display: flex; align-items: center; gap: 6px;
+  transition: all 0.15s;
+}
+.hdr-btn:hover { background: var(--bg3); color: var(--text); }
+.hdr-btn.primary { background: var(--accent); border-color: var(--accent); color: #0f172a; font-weight: 600; }
+.hdr-btn.primary:hover { background: var(--accent2); }
+
+/* ── Filter bar ───────────────────────────────────────────── */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-bar input, .filter-bar select {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 7px 12px;
+  font-size: 13px; color: var(--text);
+  font-family: var(--font);
+}
+.filter-bar input { flex: 1; min-width: 140px; }
+.filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--accent); }
+.filter-bar select option { background: var(--bg2); }
+
+/* ── Entry list ───────────────────────────────────────────── */
+.entry-list { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 14px; }
+.erow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  font-size: 14px;
+}
+.erow:last-child { border-bottom: none; }
+.erow:hover { background: var(--bg3); }
+.einfo { flex: 1; min-width: 0; }
+.ename { font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emeta { font-size: 12px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+.b-active   { background: rgba(52,211,153,0.15); color: #34d399; }
+.b-hold     { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+.b-complete { background: rgba(99,102,241,0.15);  color: #a78bfa; }
+.b-dev      { background: rgba(56,189,248,0.15);  color: #38bdf8; }
+.b-pilot    { background: rgba(251,146,60,0.15);  color: #fb923c; }
+.b-open     { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.b-high     { background: rgba(248,113,113,0.15); color: #f87171; }
+.b-med      { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+.b-low      { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.pbar-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pbar { height: 4px; background: var(--bg4); border-radius: 4px; width: 60px; overflow: hidden; }
+.pfill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.pct { font-size: 11px; color: var(--text3); min-width: 30px; text-align: right; }
+.due-tag { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.due-tag.overdue { color: var(--danger); }
+.row-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.icon-action {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text3); padding: 4px 6px;
+  border-radius: 6px; font-size: 14px;
+  transition: all 0.15s;
+}
+.icon-action:hover { background: var(--bg4); color: var(--text); }
+.icon-action.danger:hover { background: rgba(248,113,113,0.15); color: var(--danger); }
+.empty-row { padding: 24px 16px; text-align: center; color: var(--text3); font-size: 14px; font-style: italic; }
+
+/* ── Add / Edit panel ─────────────────────────────────────── */
+.panel {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px;
+  margin-bottom: 16px;
+}
+.panel-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.field-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.field-grid.one { grid-template-columns: 1fr; }
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-group label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
+.field-group input, .field-group select, .field-group textarea {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px;
+  font-size: 13px; color: var(--text); font-family: var(--font);
+  width: 100%;
+}
+.field-group input:focus, .field-group select:focus, .field-group textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.field-group select option { background: var(--bg2); }
+.field-group textarea { resize: vertical; height: 60px; }
+.progress-row { display: flex; align-items: center; gap: 10px; }
+.progress-row input[type=range] { flex: 1; accent-color: var(--accent); }
+.progress-row span { font-size: 13px; color: var(--text2); min-width: 36px; text-align: right; }
+.panel-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.btn { padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border2); background: transparent; cursor: pointer; font-size: 13px; color: var(--text2); font-family: var(--font); transition: all 0.15s; }
+.btn:hover { background: var(--bg3); color: var(--text); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #0f172a; font-weight: 600; }
+.btn.primary:hover { background: var(--accent2); }
+.btn.danger { border-color: rgba(248,113,113,0.3); color: var(--danger); }
+.btn.danger:hover { background: rgba(248,113,113,0.1); }
+
+/* ── Modal ────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 100; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: var(--radius-lg); padding: 22px;
+  width: 100%; max-width: 460px;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.modal-title { font-size: 16px; font-weight: 600; }
+
+/* ── Manage sections modal ────────────────────────────────── */
+.sec-mgmt-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.sec-mgmt-item:last-child { border-bottom: none; }
+.sec-mgmt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sec-mgmt-name { flex: 1; font-size: 14px; }
+.sec-mgmt-count { font-size: 12px; color: var(--text3); }
+
+/* ── Status bar ───────────────────────────────────────────── */
+.statusbar { padding: 6px 20px; font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.status-dot.error { background: var(--danger); }
+.status-dot.loading { background: var(--warning); }
+
+/* ── Bottom tab bar (mobile) ──────────────────────────────── */
+.tabbar {
+  display: none;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  padding: 0 8px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  flex-shrink: 0;
+  overflow-x: auto;
+  gap: 2px;
+}
+.tab-item {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 10px; cursor: pointer;
+  border-radius: var(--radius); flex-shrink: 0;
+  transition: all 0.15s; min-width: 56px;
+}
+.tab-item:hover { background: var(--bg3); }
+.tab-item.active .ti { color: var(--accent); }
+.tab-item.active .tab-lbl { color: var(--accent); }
+.tab-item .ti { font-size: 20px; color: var(--text3); transition: color 0.15s; }
+.tab-lbl { font-size: 10px; color: var(--text3); margin-top: 2px; white-space: nowrap; }
+
+/* ── Loading overlay ──────────────────────────────────────── */
+#loading { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 200; flex-direction: column; gap: 14px; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .sidebar { display: none; }
+  .tabbar { display: flex; }
+  .main-inner { padding: 14px; }
+  .field-grid.three { grid-template-columns: 1fr 1fr; }
+  .field-grid { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .topbar { padding: 10px 14px; }
+  .sec-header { flex-wrap: wrap; gap: 8px; }
+  .sec-name { font-size: 16px; }
+  .hdr-btn span { display: none; }
+}
+
+/* ── Config banner ────────────────────────────────────────── */
+.config-banner {
+  background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+  border-radius: var(--radius); padding: 10px 14px;
+  font-size: 13px; color: var(--warning);
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><span style="color:var(--text3);font-size:14px">Loading…</span></div>
+
+<div id="app" style="display:none">
+  <!-- Top bar -->
+  <div class="topbar">
+    <i class="ti ti-layout-dashboard" style="font-size:18px;color:var(--accent)" aria-hidden="true"></i>
+    <span class="topbar-title">Work <span>Organizer</span></span>
+    <button class="hdr-btn" onclick="openManage()" title="Manage sections">
+      <i class="ti ti-settings"></i><span>Sections</span>
+    </button>
+    <button class="hdr-btn primary" onclick="openAddEntry()" title="Add entry">
+      <i class="ti ti-plus"></i><span>Add entry</span>
+    </button>
+  </div>
+
+  <!-- Body: sidebar + main -->
+  <div class="body">
+    <nav class="sidebar" id="sidebar" aria-label="Sections"></nav>
+    <div class="main">
+      <div class="main-inner" id="main-inner">
+        <!-- content rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom tab bar (mobile) -->
+  <div class="tabbar" id="tabbar" role="tablist" aria-label="Sections"></div>
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Ready</span>
+  </div>
+</div>
+
+<!-- Edit entry modal -->
+<div class="modal-overlay" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="edit-title">Edit entry</span>
+      <button class="icon-action" onclick="closeModal('edit-modal')" aria-label="Close">✕</button>
+    </div>
+    <div class="field-grid one"><div class="field-group"><label>Name *</label><input id="em-name" placeholder="Entry name"></div></div>
+    <div class="field-grid" style="margin-top:8px"><div class="field-group"><label>Secondary field</label><input id="em-sub" placeholder="Customer, owner, phase…"></div><div class="field-group"><label>Status</label><select id="em-status"></select></div></div>
+    <div class="field-grid" style="margin-top:8px"><div class="field-group"><label>Priority</label><select id="em-priority"><option value="">None</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></div><div class="field-group"><label>Due date</label><input id="em-due" type="date"></div></div>
+    <div class="field-grid one" style="margin-top:8px"><div class="field-group"><label>Notes</label><textarea id="em-note" placeholder="Any additional context…"></textarea></div></div>
+    <div id="em-progress-wrap" style="display:none;margin-top:8px"><div class="field-group"><label>Progress</label><div class="progress-row"><input type="range" min="0" max="100" step="1" id="em-progress" oninput="document.getElementById('em-pct').textContent=this.value+'%'"><span id="em-pct">0%</span></div></div></div>
+    <div class="panel-actions">
+      <button class="btn danger" onclick="deleteCurrentEdit()"><i class="ti ti-trash"></i> Delete</button>
+      <button class="btn" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn primary" onclick="saveEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage sections modal -->
+<div class="modal-overlay" id="manage-modal" role="dialog" aria-modal="true" aria-labelledby="manage-title">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="manage-title">Manage sections</span>
+      <button class="icon-action" onclick="closeModal('manage-modal')" aria-label="Close">✕</button>
+    </div>
+    <div id="manage-list"></div>
+    <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Add new section</div>
+      <div class="field-grid" style="margin-bottom:8px">
+        <div class="field-group"><label>Name *</label><input id="ns-name" placeholder="e.g. Partnerships"></div>
+        <div class="field-group"><label>Icon (Tabler)</label><input id="ns-icon" placeholder="e.g. ti-star"></div>
+      </div>
+      <div class="field-grid three" style="margin-bottom:8px">
+        <div class="field-group"><label>Color</label>
+          <select id="ns-color">
+            <option value="#38bdf8">Blue</option>
+            <option value="#2dd4bf">Teal</option>
+            <option value="#a78bfa">Purple</option>
+            <option value="#fbbf24">Amber</option>
+            <option value="#fb923c">Coral</option>
+            <option value="#34d399">Green</option>
+            <option value="#f472b6">Pink</option>
+            <option value="#94a3b8">Gray</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Progress slider</label>
+          <select id="ns-progress"><option value="0">No</option><option value="1">Yes</option></select>
+        </div>
+        <div class="field-group" style="justify-content:flex-end;padding-top:18px">
+          <button class="btn primary" onclick="addSection()">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-actions"><button class="btn" onclick="closeModal('manage-modal')">Done</button></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONFIGURATION — replace these with your real Supabase values
+   ═══════════════════════════════════════════════════════════ */
+const SUPABASE_URL = 'https://ipfptninebzvyzgsnifh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Oo9LlNGt7iDJU7y8XTkq1A_XbeBQRGv';
+const IS_CONFIGURED = true;
+
+/* ═══════════════════════════════════════════════════════════
+   SUPABASE SQL — run this once in your Supabase SQL editor:
+
+   create table sections (
+     id uuid primary key default gen_random_uuid(),
+     name text not null,
+     icon text default 'ti-folder',
+     color text default '#38bdf8',
+     progress boolean default false,
+     sort_order int default 0,
+     created_at timestamptz default now()
+   );
+
+   create table items (
+     id uuid primary key default gen_random_uuid(),
+     section_id uuid references sections(id) on delete cascade,
+     name text not null,
+     sub text default '',
+     note text default '',
+     status text default 'active',
+     priority text default '',
+     due_date date,
+     progress int default 0,
+     sort_order int default 0,
+     created_at timestamptz default now(),
+     updated_at timestamptz default now()
+   );
+
+   -- Enable Row Level Security (open read/write for now)
+   alter table sections enable row level security;
+   alter table items enable row level security;
+   create policy "allow all" on sections for all using (true) with check (true);
+   create policy "allow all" on items for all using (true) with check (true);
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── App state ─────────────────────────────────────────────── */
+let db = null;
+let sections = [];
+let items = {};       // keyed by section id
+let activeId = null;
+let editTarget = null; // {section_id, item_id} or null
+let addOpen = false;
+let filterStatus = '';
+let filterSearch = '';
+
+const STATUS_OPTIONS = [
+  {v:'active',   l:'Active'},
+  {v:'hold',     l:'On hold'},
+  {v:'complete', l:'Complete'},
+  {v:'dev',      l:'In development'},
+  {v:'pilot',    l:'Pilot'},
+  {v:'open',     l:'Open / needed'},
+];
+const BADGES = {
+  active:'b-active',hold:'b-hold',complete:'b-complete',
+  dev:'b-dev',pilot:'b-pilot',open:'b-open'
+};
+const PBADGES = {high:'b-high',med:'b-med',low:'b-low'};
+
+/* ── Init ──────────────────────────────────────────────────── */
+async function init() {
+  if (IS_CONFIGURED) {
+    db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    await loadFromSupabase();
+  } else {
+    loadFromLocal();
+  }
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  renderAll();
+}
+
+/* ── Supabase data layer ───────────────────────────────────── */
+async function loadFromSupabase() {
+  setStatus('loading', 'Loading…');
+  try {
+    const {data: secs, error: e1} = await db.from('sections').select('*').order('sort_order');
+    if (e1) throw e1;
+    sections = secs || [];
+    for (const s of sections) {
+      const {data: its, error: e2} = await db.from('items').select('*').eq('section_id', s.id).order('sort_order');
+      if (e2) throw e2;
+      items[s.id] = its || [];
+    }
+    if (!sections.length) await seedDefaultSections();
+    activeId = sections[0]?.id || null;
+    setStatus('ok', 'Connected · Supabase · ' + new Date().toLocaleTimeString());
+  } catch (err) {
+    setStatus('error', 'Connection error — using local cache');
+    loadFromLocal();
+  }
+}
+
+async function seedDefaultSections() {
+  const defaults = [
+    {name:'Customer projects', icon:'ti-briefcase', color:'#38bdf8', progress:false, sort_order:0},
+    {name:'Technology',        icon:'ti-cpu',        color:'#a78bfa', progress:true,  sort_order:1},
+    {name:'Product scale-up',  icon:'ti-arrow-up-right', color:'#2dd4bf', progress:true, sort_order:2},
+    {name:'Resources',         icon:'ti-building',   color:'#fbbf24', progress:false, sort_order:3},
+  ];
+  const {data} = await db.from('sections').insert(defaults).select();
+  sections = data || [];
+  sections.forEach(s => { items[s.id] = []; });
+}
+
+async function dbAddSection(sec) {
+  if (!IS_CONFIGURED) { sections.push({...sec, id:'local-'+Date.now(), created_at:new Date().toISOString()}); items[sec.id] = []; saveLocal(); return; }
+  const {data, error} = await db.from('sections').insert(sec).select().single();
+  if (error) throw error;
+  sections.push(data);
+  items[data.id] = [];
+}
+
+async function dbRemoveSection(id) {
+  sections = sections.filter(s => s.id !== id);
+  delete items[id];
+  if (!IS_CONFIGURED) { saveLocal(); return; }
+  await db.from('sections').delete().eq('id', id);
+}
+
+async function dbAddItem(item) {
+  if (!IS_CONFIGURED) {
+    const newItem = {...item, id:'local-'+Date.now(), created_at:new Date().toISOString()};
+    (items[item.section_id] = items[item.section_id] || []).push(newItem);
+    saveLocal(); return newItem;
+  }
+  const {data, error} = await db.from('items').insert(item).select().single();
+  if (error) throw error;
+  (items[item.section_id] = items[item.section_id] || []).push(data);
+  return data;
+}
+
+async function dbUpdateItem(id, section_id, patch) {
+  const arr = items[section_id] || [];
+  const idx = arr.findIndex(i => i.id === id);
+  if (idx !== -1) arr[idx] = {...arr[idx], ...patch, updated_at: new Date().toISOString()};
+  if (!IS_CONFIGURED) { saveLocal(); return; }
+  await db.from('items').update({...patch, updated_at: new Date().toISOString()}).eq('id', id);
+}
+
+async function dbDeleteItem(id, section_id) {
+  items[section_id] = (items[section_id] || []).filter(i => i.id !== id);
+  if (!IS_CONFIGURED) { saveLocal(); return; }
+  await db.from('items').delete().eq('id', id);
+}
+
+/* ── Local fallback ────────────────────────────────────────── */
+const LS_KEY = 'wo-local-v1';
+function loadFromLocal() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    sections = saved.sections || getDefaultSections();
+    items = saved.items || {};
+    sections.forEach(s => { if (!items[s.id]) items[s.id] = []; });
+    activeId = sections[0]?.id || null;
+    setStatus('ok', 'Using local storage');
+  } catch(e) {
+    sections = getDefaultSections();
+    sections.forEach(s => { items[s.id] = []; });
+    activeId = sections[0]?.id || null;
+  }
+}
+function saveLocal() {
+  localStorage.setItem(LS_KEY, JSON.stringify({sections, items}));
+  setStatus('ok', 'Saved locally · ' + new Date().toLocaleTimeString());
+}
+function getDefaultSections() {
+  return [
+    {id:'s1', name:'Customer projects', icon:'ti-briefcase', color:'#38bdf8', progress:false, sort_order:0},
+    {id:'s2', name:'Technology',        icon:'ti-cpu',        color:'#a78bfa', progress:true,  sort_order:1},
+    {id:'s3', name:'Product scale-up',  icon:'ti-arrow-up-right', color:'#2dd4bf', progress:true, sort_order:2},
+    {id:'s4', name:'Resources',         icon:'ti-building',   color:'#fbbf24', progress:false, sort_order:3},
+  ];
+}
+
+/* ── Status bar ────────────────────────────────────────────── */
+function setStatus(state, msg) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot' + (state === 'error' ? ' error' : state === 'loading' ? ' loading' : '');
+  txt.textContent = msg;
+}
+
+/* ── Render ────────────────────────────────────────────────── */
+function renderAll() {
+  renderNav();
+  renderMain();
+}
+
+function renderNav() {
+  const sidebar = document.getElementById('sidebar');
+  const tabbar = document.getElementById('tabbar');
+  const navHtml = sections.map(s => {
+    const cnt = (items[s.id] || []).length;
+    const active = s.id === activeId;
+    return {s, cnt, active};
+  });
+
+  sidebar.innerHTML = `<div class="sidebar-label">Sections</div>` +
+    navHtml.map(({s,cnt,active}) =>
+      `<div class="sb-item${active?' active':''}" onclick="switchSection('${s.id}')" role="button" tabindex="0">
+        <span style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0"></span>
+        <i class="ti ${s.icon}" aria-hidden="true"></i>
+        <span class="sb-item-name">${s.name}</span>
+        <span class="sb-count">${cnt}</span>
+      </div>`
+    ).join('') +
+    `<button class="sb-add-btn" onclick="openManage()"><i class="ti ti-plus"></i> New section</button>`;
+
+  tabbar.innerHTML = navHtml.map(({s,cnt,active}) =>
+    `<div class="tab-item${active?' active':''}" onclick="switchSection('${s.id}')" role="tab" tabindex="0">
+      <i class="ti ${s.icon}" aria-hidden="true"></i>
+      <span class="tab-lbl">${s.name.split(' ')[0]}</span>
+    </div>`
+  ).join('');
+}
+
+function renderMain() {
+  const el = document.getElementById('main-inner');
+  const sec = sections.find(s => s.id === activeId);
+  if (!sec) { el.innerHTML = '<div class="empty-row">No sections yet. Add one using the Sections button.</div>'; return; }
+
+  const all = items[sec.id] || [];
+  const filtered = all.filter(e => {
+    if (filterStatus && e.status !== filterStatus) return false;
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      return e.name.toLowerCase().includes(q) || (e.sub||'').toLowerCase().includes(q) || (e.note||'').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const total = all.length;
+  const active = all.filter(e => e.status === 'active').length;
+  const done   = all.filter(e => e.status === 'complete' || e.status === 'pilot').length;
+  const hold   = all.filter(e => e.status === 'hold').length;
+
+  const today = new Date().toISOString().split('T')[0];
+  const rowsHtml = filtered.length ? filtered.map(e => {
+    const bc = BADGES[e.status] || 'b-hold';
+    const sl = STATUS_OPTIONS.find(o => o.v === e.status)?.l || e.status;
+    const pb = e.priority ? `<span class="badge ${PBADGES[e.priority]||''}">${e.priority}</span>` : '';
+    const dueHtml = e.due_date ? `<span class="due-tag${e.due_date < today ? ' overdue' : ''}"><i class="ti ti-calendar" style="font-size:12px" aria-hidden="true"></i> ${e.due_date}</span>` : '';
+    const progHtml = sec.progress ? `<div class="pbar-wrap"><div class="pbar"><div class="pfill" style="width:${e.progress||0}%;background:${sec.color}"></div></div><span class="pct">${e.progress||0}%</span></div>` : '';
+    return `<div class="erow">
+      <div class="einfo">
+        <div class="ename">${e.name}</div>
+        ${e.sub||e.note ? `<div class="emeta">${[e.sub,e.note].filter(Boolean).join(' · ')}</div>` : ''}
+      </div>
+      ${dueHtml}
+      ${progHtml}
+      ${pb}
+      <span class="badge ${bc}">${sl}</span>
+      <div class="row-actions">
+        <button class="icon-action" onclick="openEdit('${sec.id}','${e.id}')" aria-label="Edit entry"><i class="ti ti-edit"></i></button>
+        <button class="icon-action danger" onclick="confirmDelete('${sec.id}','${e.id}')" aria-label="Delete entry"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty-row">${filterStatus||filterSearch ? 'No matching entries.' : 'No entries yet — use Add entry to get started.'}</div>`;
+
+  el.innerHTML =
+    (!IS_CONFIGURED ? `<div class="config-banner"><i class="ti ti-alert-triangle"></i> Placeholder credentials — using local storage only. Add your Supabase keys to enable cloud sync.</div>` : '') +
+    (addOpen ? renderAddPanel(sec) : '') +
+    `<div class="sec-header">
+      <span class="sec-dot" style="background:${sec.color}"></span>
+      <span class="sec-name">${sec.name}</span>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-lbl">Total</div><div class="metric-val">${total}</div></div>
+      <div class="metric"><div class="metric-lbl">Active</div><div class="metric-val">${active}</div></div>
+      <div class="metric"><div class="metric-lbl">Done / pilot</div><div class="metric-val">${done}</div></div>
+      <div class="metric"><div class="metric-lbl">On hold</div><div class="metric-val">${hold}</div></div>
+    </div>
+    <div class="filter-bar">
+      <input placeholder="Search entries…" oninput="setSearch(this.value)" value="${filterSearch}">
+      <select onchange="setFilter(this.value)">
+        <option value="">All statuses</option>
+        ${STATUS_OPTIONS.map(o => `<option value="${o.v}"${filterStatus===o.v?' selected':''}>${o.l}</option>`).join('')}
+      </select>
+    </div>
+    <div class="entry-list">${rowsHtml}</div>`;
+}
+
+function renderAddPanel(sec) {
+  const opts = STATUS_OPTIONS.map(o => `<option value="${o.v}">${o.l}</option>`).join('');
+  return `<div class="panel">
+    <div class="panel-title"><i class="ti ti-plus" aria-hidden="true"></i> New entry in ${sec.name}</div>
+    <div class="field-grid">
+      <div class="field-group"><label>Name *</label><input id="a-name" placeholder="Entry name"></div>
+      <div class="field-group"><label>Secondary field</label><input id="a-sub" placeholder="Customer, owner, phase…"></div>
+    </div>
+    <div class="field-grid three" style="margin-top:8px">
+      <div class="field-group"><label>Status</label><select id="a-status">${opts}</select></div>
+      <div class="field-group"><label>Priority</label><select id="a-priority"><option value="">None</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></div>
+      <div class="field-group"><label>Due date</label><input id="a-due" type="date"></div>
+    </div>
+    <div class="field-grid one" style="margin-top:8px">
+      <div class="field-group"><label>Notes</label><textarea id="a-note" placeholder="Context, links, actions…"></textarea></div>
+    </div>
+    ${sec.progress ? `<div style="margin-top:8px"><div class="field-group"><label>Progress</label><div class="progress-row"><input type="range" min="0" max="100" step="1" id="a-progress" value="0" oninput="document.getElementById('a-pct').textContent=this.value+'%'"><span id="a-pct">0%</span></div></div></div>` : ''}
+    <div class="panel-actions">
+      <button class="btn" onclick="cancelAdd()">Cancel</button>
+      <button class="btn primary" onclick="submitAdd()"><i class="ti ti-check"></i> Save entry</button>
+    </div>
+  </div>`;
+}
+
+/* ── Actions ───────────────────────────────────────────────── */
+function switchSection(id) {
+  activeId = id;
+  filterStatus = '';
+  filterSearch = '';
+  addOpen = false;
+  renderAll();
+}
+
+function openAddEntry() { addOpen = true; renderMain(); setTimeout(() => { const el = document.getElementById('a-name'); if(el) el.focus(); }, 50); }
+function cancelAdd() { addOpen = false; renderMain(); }
+
+async function submitAdd() {
+  const sec = sections.find(s => s.id === activeId);
+  const name = (document.getElementById('a-name')?.value || '').trim();
+  if (!name) { alert('Name is required.'); return; }
+  const prog = document.getElementById('a-progress');
+  const item = {
+    section_id: activeId,
+    name,
+    sub: document.getElementById('a-sub')?.value.trim() || '',
+    note: document.getElementById('a-note')?.value.trim() || '',
+    status: document.getElementById('a-status')?.value || 'active',
+    priority: document.getElementById('a-priority')?.value || '',
+    due_date: document.getElementById('a-due')?.value || null,
+    progress: prog ? parseInt(prog.value) : 0,
+    sort_order: (items[activeId]||[]).length,
+  };
+  setStatus('loading', 'Saving…');
+  try {
+    await dbAddItem(item);
+    if (!IS_CONFIGURED) saveLocal();
+    setStatus('ok', 'Saved · ' + new Date().toLocaleTimeString());
+  } catch(e) { setStatus('error', 'Save failed'); }
+  addOpen = false;
+  renderAll();
+}
+
+function openEdit(section_id, item_id) {
+  const sec = sections.find(s => s.id === section_id);
+  const e = (items[section_id]||[]).find(i => i.id === item_id);
+  if (!e) return;
+  editTarget = {section_id, item_id};
+  document.getElementById('em-name').value = e.name || '';
+  document.getElementById('em-sub').value = e.sub || '';
+  document.getElementById('em-note').value = e.note || '';
+  document.getElementById('em-due').value = e.due_date || '';
+  document.getElementById('em-priority').value = e.priority || '';
+  const statusSel = document.getElementById('em-status');
+  statusSel.innerHTML = STATUS_OPTIONS.map(o => `<option value="${o.v}"${e.status===o.v?' selected':''}>${o.l}</option>`).join('');
+  const pw = document.getElementById('em-progress-wrap');
+  pw.style.display = sec?.progress ? 'block' : 'none';
+  const ep = document.getElementById('em-progress');
+  if (ep) { ep.value = e.progress || 0; document.getElementById('em-pct').textContent = (e.progress||0)+'%'; }
+  openModal('edit-modal');
+}
+
+async function saveEdit() {
+  if (!editTarget) return;
+  const {section_id, item_id} = editTarget;
+  const name = document.getElementById('em-name').value.trim();
+  if (!name) { alert('Name is required.'); return; }
+  const ep = document.getElementById('em-progress');
+  const patch = {
+    name,
+    sub: document.getElementById('em-sub').value.trim(),
+    note: document.getElementById('em-note').value.trim(),
+    status: document.getElementById('em-status').value,
+    priority: document.getElementById('em-priority').value,
+    due_date: document.getElementById('em-due').value || null,
+    progress: ep ? parseInt(ep.value) : undefined,
+  };
+  if (patch.progress === undefined) delete patch.progress;
+  setStatus('loading', 'Saving…');
+  try {
+    await dbUpdateItem(item_id, section_id, patch);
+    if (!IS_CONFIGURED) saveLocal();
+    setStatus('ok', 'Saved · ' + new Date().toLocaleTimeString());
+  } catch(e) { setStatus('error', 'Save failed'); }
+  closeModal('edit-modal');
+  editTarget = null;
+  renderMain();
+}
+
+async function deleteCurrentEdit() {
+  if (!editTarget) return;
+  if (!confirm('Delete this entry? This cannot be undone.')) return;
+  const {section_id, item_id} = editTarget;
+  await dbDeleteItem(item_id, section_id);
+  if (!IS_CONFIGURED) saveLocal();
+  closeModal('edit-modal');
+  editTarget = null;
+  renderMain();
+  renderNav();
+}
+
+function confirmDelete(section_id, item_id) {
+  const e = (items[section_id]||[]).find(i => i.id === item_id);
+  if (!e) return;
+  if (!confirm(`Delete "${e.name}"?`)) return;
+  dbDeleteItem(item_id, section_id).then(() => {
+    if (!IS_CONFIGURED) saveLocal();
+    renderAll();
+  });
+}
+
+async function addSection() {
+  const name = document.getElementById('ns-name').value.trim();
+  if (!name) { alert('Section name is required.'); return; }
+  const icon = document.getElementById('ns-icon').value.trim() || 'ti-folder';
+  const color = document.getElementById('ns-color').value;
+  const progress = document.getElementById('ns-progress').value === '1';
+  const sec = { name, icon, color, progress, sort_order: sections.length };
+  try {
+    await dbAddSection(sec);
+    if (!IS_CONFIGURED) saveLocal();
+  } catch(e) { setStatus('error', 'Could not add section'); }
+  document.getElementById('ns-name').value = '';
+  document.getElementById('ns-icon').value = '';
+  renderManageList();
+  renderNav();
+}
+
+async function removeSection(id) {
+  const sec = sections.find(s => s.id === id);
+  if (!sec) return;
+  const cnt = (items[id]||[]).length;
+  const msg = cnt > 0 ? `Delete "${sec.name}" and all ${cnt} entries in it? This cannot be undone.` : `Delete section "${sec.name}"?`;
+  if (!confirm(msg)) return;
+  if (activeId === id) activeId = sections.find(s => s.id !== id)?.id || null;
+  await dbRemoveSection(id);
+  if (!IS_CONFIGURED) saveLocal();
+  renderManageList();
+  renderAll();
+}
+
+function openManage() { renderManageList(); openModal('manage-modal'); }
+function renderManageList() {
+  document.getElementById('manage-list').innerHTML = sections.map(s =>
+    `<div class="sec-mgmt-item">
+      <span class="sec-mgmt-dot" style="background:${s.color}"></span>
+      <i class="ti ${s.icon}" style="font-size:15px;color:var(--text3)" aria-hidden="true"></i>
+      <span class="sec-mgmt-name">${s.name}</span>
+      <span class="sec-mgmt-count">${(items[s.id]||[]).length} items</span>
+      ${sections.length > 1 ? `<button class="icon-action danger" onclick="removeSection('${s.id}')" aria-label="Remove section"><i class="ti ti-trash"></i></button>` : ''}
+    </div>`
+  ).join('');
+}
+
+function setFilter(v) { filterStatus = v; renderMain(); }
+function setSearch(v) { filterSearch = v; renderMain(); }
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+/* ── Keyboard nav ──────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal('edit-modal');
+    closeModal('manage-modal');
+    if (addOpen) { addOpen = false; renderMain(); }
+  }
+});
+
+init();
+</script>
+</body>
+</html>
