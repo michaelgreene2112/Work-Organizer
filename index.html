@@ -197,6 +197,13 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
   .topbar{padding:10px 14px}
   .detail-tab{padding:10px 12px;font-size:12px}
   .hdr-btn span{display:none}
+.report-group{margin-bottom:22px}
+.report-group-title{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.report-entry-title{font-size:12px;font-weight:600;color:var(--text2);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+.report-task-row{display:flex;align-items:flex-start;gap:10px;padding:7px 10px;border-radius:var(--radius);background:var(--bg3);margin-bottom:5px;font-size:13px}
+.report-task-desc{flex:1;color:var(--text)}
+.report-task-meta{font-size:11px;color:var(--text3);margin-top:3px}
+.report-empty{color:var(--text3);font-size:13px;font-style:italic;padding:10px 0}
 }
 </style>
 </head>
@@ -209,6 +216,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
     <button class="hdr-btn" onclick="openManage()"><i class="ti ti-settings"></i><span>Sections</span></button>
     <button class="hdr-btn" onclick="openRoster('people')"><i class="ti ti-users"></i><span>People</span></button>
     <button class="hdr-btn" onclick="openRoster('resources')"><i class="ti ti-tool"></i><span>Resources</span></button>
+    <button class="hdr-btn" onclick="openReport()"><i class="ti ti-report"></i><span>Reports</span></button>
     <button class="hdr-btn primary" onclick="openAddEntry()"><i class="ti ti-plus"></i><span>Add entry</span></button>
   </div>
   <div class="body">
@@ -307,6 +315,30 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
     <div class="modal-header"><span class="modal-title">Add history note</span><button class="icon-action" onclick="closeModal('hist-modal')">✕</button></div>
     <div class="field-grid one" style="margin-bottom:8px"><div class="field-group"><label>Note *</label><textarea id="hm-text" style="height:100px" placeholder="Describe progress, decisions, milestones…"></textarea></div></div>
     <div class="panel-actions"><button class="btn" onclick="closeModal('hist-modal')">Cancel</button><button class="btn primary" onclick="saveHistNote()">Add note</button></div>
+  </div>
+</div>
+
+<!-- Report modal -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header"><span class="modal-title"><i class="ti ti-report" aria-hidden="true"></i> Task report</span><button class="icon-action" onclick="closeModal('report-modal')">✕</button></div>
+    <div class="field-grid three" style="margin-bottom:14px;align-items:end">
+      <div class="field-group"><label>Report for</label><select id="rpt-type" onchange="updateRptSelect()"><option value="person">Person</option><option value="resource">Resource</option></select></div>
+      <div class="field-group"><label>Select</label><select id="rpt-target"></select></div>
+      <div class="field-group"><label>Task status</label><select id="rpt-status">
+        <option value="">All tasks</option>
+        <option value="open_active">Open &amp; in progress only</option>
+        <option value="open">Open only</option>
+        <option value="inprog">In progress only</option>
+        <option value="done">Done only</option>
+      </select></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:16px">
+      <button class="btn" onclick="runReport()"><i class="ti ti-refresh"></i> Generate</button>
+      <button class="btn" onclick="printReport()"><i class="ti ti-printer"></i> Print</button>
+      <button class="btn" onclick="downloadDocx()"><i class="ti ti-file-word"></i> Download Word</button>
+    </div>
+    <div id="report-output" style="max-height:420px;overflow-y:auto;border-top:1px solid var(--border);padding-top:14px"></div>
   </div>
 </div>
 
@@ -496,6 +528,7 @@ function closeDetail(){
     <button class="hdr-btn" onclick="openManage()"><i class="ti ti-settings"></i><span>Sections</span></button>
     <button class="hdr-btn" onclick="openRoster('people')"><i class="ti ti-users"></i><span>People</span></button>
     <button class="hdr-btn" onclick="openRoster('resources')"><i class="ti ti-tool"></i><span>Resources</span></button>
+    <button class="hdr-btn" onclick="openReport()"><i class="ti ti-report"></i><span>Reports</span></button>
     <button class="hdr-btn primary" onclick="openAddEntry()"><i class="ti ti-plus"></i><span>Add entry</span></button>`;
   renderMain();
 }
@@ -917,7 +950,7 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    ['edit-modal','manage-modal','roster-modal','task-modal','file-modal','hist-modal'].forEach(closeModal);
+    ['edit-modal','manage-modal','roster-modal','task-modal','file-modal','hist-modal','report-modal'].forEach(closeModal);
     if(addOpen){addOpen=false;renderMain();}
   }
 });
@@ -925,6 +958,300 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('#tm-people-wrap')&&!e.target.closest('#tm-people-dropdown'))document.getElementById('tm-people-dropdown')?.classList.remove('open');
   if(!e.target.closest('#tm-res-wrap')&&!e.target.closest('#tm-res-dropdown'))document.getElementById('tm-res-dropdown')?.classList.remove('open');
 });
+
+/* ── Reports ─────────────────────────────────────── */
+let reportData=[];
+
+function openReport(){
+  updateRptSelect();
+  document.getElementById('report-output').innerHTML='<div class="report-empty">Select options above and click Generate.</div>';
+  openModal('report-modal');
+}
+
+function updateRptSelect(){
+  const type=document.getElementById('rpt-type').value;
+  const list=type==='person'?people:resources;
+  document.getElementById('rpt-target').innerHTML=list.length
+    ?list.map(p=>`<option value="${p.name}">${p.name}${p.role||p.category?' ('+( p.role||p.category)+')':''}</option>`).join('')
+    :`<option value="">No ${type==='person'?'people':'resources'} in roster</option>`;
+}
+
+async function runReport(){
+  const type=document.getElementById('rpt-type').value;
+  const target=document.getElementById('rpt-target').value;
+  const statusFilter=document.getElementById('rpt-status').value;
+  if(!target){document.getElementById('report-output').innerHTML='<div class="report-empty">No selection available.</div>';return;}
+
+  document.getElementById('report-output').innerHTML='<div class="report-empty">Loading…</div>';
+
+  // Load all tasks across all sections fresh from DB
+  const allItems=[];
+  for(const sec of sections){
+    const its=items[sec.id]||[];
+    its.forEach(it=>allItems.push({...it,sectionName:sec.name,sectionColor:sec.color}));
+  }
+
+  // Also load tasks for items not yet cached
+  const uncachedItemIds=allItems.map(i=>i.id).filter(id=>!tasks[id]);
+  if(uncachedItemIds.length){
+    const{data:newTasks}=await db.from('tasks').select('*').in('item_id',uncachedItemIds);
+    if(newTasks){
+      newTasks.forEach(t=>{
+        (tasks[t.item_id]=tasks[t.item_id]||[]).push(t);
+      });
+    }
+  }
+
+  // Build report: group by section → entry → tasks assigned to target
+  reportData=[];
+  const field=type==='person'?'people_text':'resources_text';
+  const today=new Date().toISOString().split('T')[0];
+  const statusMatch=(s)=>{
+    if(!statusFilter)return true;
+    if(statusFilter==='open_active')return s==='open'||s==='inprog';
+    return s===statusFilter;
+  };
+
+  for(const sec of sections){
+    const secItems=items[sec.id]||[];
+    const secGroup={sectionName:sec.name,sectionColor:sec.color,entries:[]};
+    for(const it of secItems){
+      const itTasks=(tasks[it.id]||[]).filter(t=>{
+        const inTarget=(t[field]||'').split(',').map(s=>s.trim()).includes(target);
+        const statusOk=statusMatch(t.status);
+        return inTarget&&statusOk;
+      });
+      if(itTasks.length){
+        secGroup.entries.push({itemName:it.name,tasks:itTasks});
+      }
+    }
+    if(secGroup.entries.length)reportData.push(secGroup);
+  }
+
+  renderReportOutput(target,type,statusFilter,today);
+}
+
+function renderReportOutput(target,type,statusFilter,today){
+  const el=document.getElementById('report-output');
+  if(!reportData.length){
+    el.innerHTML=`<div class="report-empty">No tasks found for <strong>${target}</strong>${statusFilter?' with status "'+TLABELS[statusFilter]+'"':''}.</div>`;
+    return;
+  }
+  el.innerHTML=reportData.map(sg=>`
+    <div class="report-group">
+      <div class="report-group-title">
+        <span style="width:8px;height:8px;border-radius:50%;background:${sg.sectionColor};display:inline-block;flex-shrink:0"></span>
+        ${sg.sectionName}
+      </div>
+      ${sg.entries.map(en=>`
+        <div class="report-entry-title"><i class="ti ti-folder" aria-hidden="true"></i> ${en.itemName}</div>
+        ${en.tasks.map(t=>{
+          const overdue=t.due_date&&t.due_date<today&&t.status!=='done';
+          const bc=TBADGES[t.status]||'b-open';const lbl=TLABELS[t.status]||t.status;
+          return`<div class="report-task-row">
+            <div style="flex:1">
+              <div class="report-task-desc">${t.description}</div>
+              <div class="report-task-meta">
+                ${t.due_date?`<span style="${overdue?'color:var(--danger)':''}"><i class="ti ti-calendar" aria-hidden="true"></i> ${t.due_date}${overdue?' ⚠ overdue':''}</span> `:''}
+                ${t.people_text?`<span><i class="ti ti-user" aria-hidden="true"></i> ${t.people_text}</span> `:''}
+                ${t.resources_text?`<span><i class="ti ti-tool" aria-hidden="true"></i> ${t.resources_text}</span>`:''}
+              </div>
+            </div>
+            <span class="badge ${bc}">${lbl}</span>
+          </div>`;
+        }).join('')}
+      `).join('')}
+    </div>`).join('');
+}
+
+function getStatusLabel(sf){
+  if(!sf)return'All tasks';
+  if(sf==='open_active')return'Open & in progress';
+  return TLABELS[sf]||sf;
+}
+
+function buildPrintHTML(target,type,statusFilter){
+  const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const typeLabel=type==='person'?'Person':'Resource';
+  const rows=reportData.map(sg=>`
+    <div class="group">
+      <div class="group-title">${sg.sectionName}</div>
+      ${sg.entries.map(en=>`
+        <div class="entry-title">${en.itemName}</div>
+        <table>
+          <thead><tr><th>Task</th><th>Status</th><th>Due</th><th>People</th><th>Resources</th></tr></thead>
+          <tbody>
+            ${en.tasks.map(t=>`<tr>
+              <td>${t.description}</td>
+              <td>${TLABELS[t.status]||t.status}</td>
+              <td>${t.due_date||'—'}</td>
+              <td>${t.people_text||'—'}</td>
+              <td>${t.resources_text||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      `).join('')}
+    </div>`).join('');
+  return`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+  <title>Task Report — ${target}</title>
+  <style>
+    body{font-family:-apple-system,'Segoe UI',sans-serif;font-size:13px;color:#1e293b;margin:0;padding:32px 40px}
+    h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0f172a}
+    .meta{font-size:12px;color:#64748b;margin-bottom:28px}
+    .group{margin-bottom:28px;page-break-inside:avoid}
+    .group-title{font-size:14px;font-weight:700;color:#0ea5e9;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px}
+    .entry-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin:12px 0 6px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+    th{background:#f1f5f9;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;text-transform:uppercase;color:#64748b;border:1px solid #e2e8f0}
+    td{padding:6px 10px;border:1px solid #e2e8f0;vertical-align:top;font-size:12px}
+    tr:nth-child(even) td{background:#f8fafc}
+    .footer{margin-top:32px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px}
+    @media print{body{padding:16px 20px}.group{page-break-inside:avoid}}
+  </style></head><body>
+  <h1>Task Report — ${target}</h1>
+  <div class="meta">${typeLabel}: <strong>${target}</strong> &nbsp;·&nbsp; Status: <strong>${getStatusLabel(statusFilter)}</strong> &nbsp;·&nbsp; Generated: ${date}</div>
+  ${rows.length?rows:'<p style="color:#94a3b8;font-style:italic">No tasks found.</p>'}
+  <div class="footer">Work Organizer · Exported ${date}</div>
+  </body></html>`;
+}
+
+function printReport(){
+  const target=document.getElementById('rpt-target').value;
+  const type=document.getElementById('rpt-type').value;
+  const statusFilter=document.getElementById('rpt-status').value;
+  if(!reportData.length){alert('Generate the report first.');return;}
+  const html=buildPrintHTML(target,type,statusFilter);
+  const win=window.open('','_blank');
+  win.document.write(html);win.document.close();
+  win.onload=()=>{win.focus();win.print();};
+}
+
+async function downloadDocx(){
+  const target=document.getElementById('rpt-target').value;
+  const type=document.getElementById('rpt-type').value;
+  const statusFilter=document.getElementById('rpt-status').value;
+  if(!reportData.length){alert('Generate the report first.');return;}
+
+  // Load docx library on demand
+  if(!window.docx){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js';
+      s.onload=res;s.onerror=rej;document.head.appendChild(s);
+    });
+  }
+
+  const {Document,Packer,Paragraph,Table,TableRow,TableCell,TextRun,HeadingLevel,
+         AlignmentType,BorderStyle,WidthType,ShadingType}=window.docx;
+
+  const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const typeLabel=type==='person'?'Person':'Resource';
+  const children=[];
+
+  // Title
+  children.push(new Paragraph({
+    text:`Task Report — ${target}`,
+    heading:HeadingLevel.HEADING_1,
+    spacing:{after:120}
+  }));
+
+  // Subtitle line
+  children.push(new Paragraph({
+    children:[
+      new TextRun({text:`${typeLabel}: `,color:'666666',size:20}),
+      new TextRun({text:target,bold:true,size:20}),
+      new TextRun({text:`   |   Status: `,color:'666666',size:20}),
+      new TextRun({text:getStatusLabel(statusFilter),bold:true,size:20}),
+      new TextRun({text:`   |   Generated: ${date}`,color:'666666',size:20}),
+    ],
+    spacing:{after:320}
+  }));
+
+  const cellBorder={style:BorderStyle.SINGLE,size:4,color:'CBD5E1'};
+  const allBorders={top:cellBorder,bottom:cellBorder,left:cellBorder,right:cellBorder};
+  const colWidths=[3600,1200,1100,1500,1500]; // twips, total ~8900
+
+  for(const sg of reportData){
+    // Section heading
+    children.push(new Paragraph({
+      children:[new TextRun({text:sg.sectionName,bold:true,color:'0EA5E9',size:26})],
+      spacing:{before:280,after:100},
+      border:{bottom:{style:BorderStyle.SINGLE,size:6,color:'0EA5E9'}}
+    }));
+
+    for(const en of sg.entries){
+      // Entry/project sub-heading
+      children.push(new Paragraph({
+        children:[new TextRun({text:en.itemName,bold:true,size:22,color:'334155'})],
+        spacing:{before:200,after:80}
+      }));
+
+      // Table header row
+      const headerRow=new TableRow({
+        tableHeader:true,
+        children:[
+          ['Task','Status','Due Date','People','Resources'].map((h,i)=>
+            new TableCell({
+              width:{size:colWidths[i],type:WidthType.DXA},
+              shading:{type:ShadingType.SOLID,color:'F1F5F9'},
+              borders:allBorders,
+              children:[new Paragraph({children:[new TextRun({text:h,bold:true,size:18,color:'64748B'})]})]
+            })
+          )
+        ].flat()
+      });
+
+      // Data rows
+      const dataRows=en.tasks.map((t,idx)=>new TableRow({
+        children:[
+          new TableCell({width:{size:colWidths[0],type:WidthType.DXA},borders:allBorders,
+            shading:idx%2===1?{type:ShadingType.SOLID,color:'F8FAFC'}:{},
+            children:[new Paragraph({children:[new TextRun({text:t.description,size:18})]})]
+          }),
+          new TableCell({width:{size:colWidths[1],type:WidthType.DXA},borders:allBorders,
+            shading:idx%2===1?{type:ShadingType.SOLID,color:'F8FAFC'}:{},
+            children:[new Paragraph({children:[new TextRun({text:TLABELS[t.status]||t.status,size:18})]})]
+          }),
+          new TableCell({width:{size:colWidths[2],type:WidthType.DXA},borders:allBorders,
+            shading:idx%2===1?{type:ShadingType.SOLID,color:'F8FAFC'}:{},
+            children:[new Paragraph({children:[new TextRun({text:t.due_date||'—',size:18,color:t.due_date&&t.due_date<new Date().toISOString().split('T')[0]&&t.status!=='done'?'EF4444':'000000'})]})]
+          }),
+          new TableCell({width:{size:colWidths[3],type:WidthType.DXA},borders:allBorders,
+            shading:idx%2===1?{type:ShadingType.SOLID,color:'F8FAFC'}:{},
+            children:[new Paragraph({children:[new TextRun({text:t.people_text||'—',size:18})]})]
+          }),
+          new TableCell({width:{size:colWidths[4],type:WidthType.DXA},borders:allBorders,
+            shading:idx%2===1?{type:ShadingType.SOLID,color:'F8FAFC'}:{},
+            children:[new Paragraph({children:[new TextRun({text:t.resources_text||'—',size:18})]})]
+          }),
+        ]
+      }));
+
+      children.push(new Table({rows:[headerRow,...dataRows],width:{size:8900,type:WidthType.DXA}}));
+      children.push(new Paragraph({text:'',spacing:{after:160}}));
+    }
+  }
+
+  if(!reportData.length){
+    children.push(new Paragraph({children:[new TextRun({text:'No tasks found.',color:'94A3B8',italics:true,size:20})]}));
+  }
+
+  // Footer
+  children.push(new Paragraph({
+    children:[new TextRun({text:`Work Organizer · Exported ${date}`,color:'94A3B8',size:16})],
+    spacing:{before:400},
+    border:{top:{style:BorderStyle.SINGLE,size:4,color:'E2E8F0'}}
+  }));
+
+  const doc=new Document({sections:[{properties:{},children}]});
+  const blob=await Packer.toBlob(doc);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`task-report-${target.toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.docx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('ok','Word file downloaded');
+}
 
 init();
 </script>
