@@ -6,10 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Work Organizer">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#ffffff">
 <title>Work Organizer</title>
 <script>
-const manifestData={name:"Work Organizer",short_name:"Organizer",start_url:"./",display:"standalone",background_color:"#0f172a",theme_color:"#0f172a",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a'/><text y='.9em' font-size='80' x='10'>📋</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
+const manifestData={name:"Work Organizer",short_name:"Organizer",start_url:"./",display:"standalone",background_color:"#ffffff",theme_color:"#ffffff",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230ea5e9'/><text y='.9em' font-size='80' x='10'>📋</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
 const blob=new Blob([JSON.stringify(manifestData)],{type:'application/json'});
 const link=document.createElement('link');link.rel='manifest';link.href=URL.createObjectURL(blob);document.head.appendChild(link);
 </script>
@@ -18,11 +18,11 @@ const link=document.createElement('link');link.rel='manifest';link.href=URL.crea
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0f172a;--bg2:#1e293b;--bg3:#273548;--bg4:#334155;
-  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
-  --text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
-  --accent:#38bdf8;--accent2:#0ea5e9;
-  --success:#34d399;--warning:#fbbf24;--danger:#f87171;
+  --bg:#f8fafc;--bg2:#ffffff;--bg3:#f1f5f9;--bg4:#e2e8f0;
+  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.14);
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --accent:#0ea5e9;--accent2:#0284c7;
+  --success:#16a34a;--warning:#d97706;--danger:#dc2626;
   --purple:#a78bfa;--teal:#2dd4bf;--coral:#fb923c;
   --radius:10px;--radius-lg:14px;
   --sidebar-w:210px;--panel-w:420px;--tabbar-h:64px;
@@ -37,7 +37,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .topbar-title span{color:var(--accent);}
 .hdr-btn{padding:6px 12px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:5px;font-family:var(--font);transition:all .15s;}
 .hdr-btn:hover{background:var(--bg3);color:var(--text);}
-.hdr-btn.primary{background:var(--accent);border-color:var(--accent);color:#0f172a;font-weight:600;}
+.hdr-btn.primary{background:var(--accent);border-color:var(--accent);color:#ffffff;font-weight:600;}
 .hdr-btn.primary:hover{background:var(--accent2);}
 
 /* Body layout */
@@ -89,19 +89,19 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .ename{font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .emeta{font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .badge{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600;flex-shrink:0;white-space:nowrap;}
-.b-active{background:rgba(52,211,153,.15);color:#34d399;}
-.b-hold{background:rgba(251,191,36,.15);color:#fbbf24;}
-.b-complete{background:rgba(167,139,250,.15);color:#a78bfa;}
-.b-dev{background:rgba(56,189,248,.15);color:#38bdf8;}
-.b-pilot{background:rgba(251,146,60,.15);color:#fb923c;}
-.b-open{background:rgba(148,163,184,.15);color:#94a3b8;}
-.b-high{background:rgba(248,113,113,.15);color:#f87171;}
-.b-med{background:rgba(251,191,36,.15);color:#fbbf24;}
-.b-low{background:rgba(148,163,184,.15);color:#94a3b8;}
-.b-task-open{background:rgba(56,189,248,.12);color:#38bdf8;}
-.b-task-progress{background:rgba(251,191,36,.12);color:#fbbf24;}
-.b-task-done{background:rgba(52,211,153,.12);color:#34d399;}
-.b-task-blocked{background:rgba(248,113,113,.12);color:#f87171;}
+.b-active{background:#dcfce7;color:#15803d;}
+.b-hold{background:#fef9c3;color:#a16207;}
+.b-complete{background:#ede9fe;color:#6d28d9;}
+.b-dev{background:#e0f2fe;color:#0369a1;}
+.b-pilot{background:#ffedd5;color:#c2410c;}
+.b-open{background:#f1f5f9;color:#475569;}
+.b-high{background:#fee2e2;color:#b91c1c;}
+.b-med{background:#fef9c3;color:#a16207;}
+.b-low{background:#f1f5f9;color:#64748b;}
+.b-task-open{background:#e0f2fe;color:#0369a1;}
+.b-task-progress{background:#fef9c3;color:#a16207;}
+.b-task-done{background:#dcfce7;color:#15803d;}
+.b-task-blocked{background:#fee2e2;color:#b91c1c;}
 .pbar-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0;}
 .pbar{height:4px;background:var(--bg4);border-radius:4px;width:50px;overflow:hidden;}
 .pfill{height:100%;border-radius:4px;}
@@ -143,7 +143,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .p-select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);}
 .p-select:focus{outline:none;border-color:var(--accent);}
 .p-select option{background:var(--bg2);}
-.save-btn{padding:7px 16px;border-radius:var(--radius);border:none;background:var(--accent);color:#0f172a;font-weight:600;font-size:13px;cursor:pointer;font-family:var(--font);}
+.save-btn{padding:7px 16px;border-radius:var(--radius);border:none;background:var(--accent);color:#ffffff;font-weight:600;font-size:13px;cursor:pointer;font-family:var(--font);}
 .save-btn:hover{background:var(--accent2);}
 .small-btn{padding:5px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .15s;}
 .small-btn:hover{background:var(--bg3);color:var(--text);}
@@ -214,7 +214,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .panel-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;}
 .btn{padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;cursor:pointer;font-size:13px;color:var(--text2);font-family:var(--font);transition:all .15s;}
 .btn:hover{background:var(--bg3);color:var(--text);}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#0f172a;font-weight:600;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#ffffff;font-weight:600;}
 .btn.primary:hover{background:var(--accent2);}
 
 /* Modals */
@@ -235,9 +235,9 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 
 /* Status bar */
 .statusbar{padding:5px 18px;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);flex-shrink:0;}
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--success);}
-.status-dot.error{background:var(--danger);}
-.status-dot.loading{background:var(--warning);}
+.status-dot{width:6px;height:6px;border-radius:50%;background:#16a34a;}
+.status-dot.error{background:#dc2626;}
+.status-dot.loading{background:#d97706;}
 
 /* Tab bar mobile */
 .tabbar{display:none;background:var(--bg2);border-top:1px solid var(--border);padding:0 8px;padding-bottom:env(safe-area-inset-bottom,0px);flex-shrink:0;overflow-x:auto;gap:2px;}
@@ -247,8 +247,8 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .tab-item.active .ti,.tab-item.active .tab-lbl{color:var(--accent);}
 
 /* Loading */
-#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:14px;}
-.spinner{width:30px;height:30px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+#loading{position:fixed;inset:0;background:#f8fafc;display:flex;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:14px;}
+.spinner{width:30px;height:30px;border:3px solid #e2e8f0;border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 /* Config banner */
