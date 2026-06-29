@@ -14,7 +14,6 @@ const blob=new Blob([JSON.stringify(manifestData)],{type:'application/json'});
 const link=document.createElement('link');link.rel='manifest';link.href=URL.createObjectURL(blob);document.head.appendChild(link);
 </script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -343,10 +342,50 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 </div>
 
 <script>
-const SUPABASE_URL='https://ipfptninebzvyzgsnifh.supabase.co';
-const SUPABASE_KEY='sb_publishable_Oo9LlNGt7iDJU7y8XTkq1A_XbeBQRGv';
+/* ── Neon config ─────────────────────────────────── */
+const NEON_HOST='ep-square-rain-adx9em6r-pooler.c-2.us-east-1.aws.neon.tech';
+const NEON_DB='neondb';
+const NEON_USER='neondb_owner';
+const NEON_PASS='npg_7Fzv3JtlPOpk';
+const NEON_URL=`https://${NEON_HOST}/sql`;
+const NEON_AUTH='Basic '+btoa(`${NEON_USER}:${NEON_PASS}`);
 
-let db=null;
+async function sql(query,params=[]){
+  const r=await fetch(NEON_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':NEON_AUTH,'Neon-Connection-String':`postgresql://${NEON_USER}:${NEON_PASS}@${NEON_HOST}/${NEON_DB}?sslmode=require`},
+    body:JSON.stringify({query,params})
+  });
+  if(!r.ok){const e=await r.text();throw new Error(e);}
+  const j=await r.json();
+  return j.rows||[];
+}
+
+// Helper: insert a row and return it
+async function sqlInsert(table,obj){
+  const keys=Object.keys(obj);
+  const vals=Object.values(obj);
+  const placeholders=vals.map((_,i)=>`$${i+1}`).join(',');
+  const rows=await sql(
+    `insert into ${table} (${keys.join(',')}) values (${placeholders}) returning *`,
+    vals
+  );
+  return rows[0]||null;
+}
+
+// Helper: update a row
+async function sqlUpdate(table,patch,idCol,idVal){
+  const keys=Object.keys(patch);
+  const vals=Object.values(patch);
+  const sets=keys.map((k,i)=>`${k}=$${i+1}`).join(',');
+  await sql(`update ${table} set ${sets} where ${idCol}=$${keys.length+1}`,[...vals,idVal]);
+}
+
+// Helper: delete a row
+async function sqlDelete(table,idCol,idVal){
+  await sql(`delete from ${table} where ${idCol}=$1`,[idVal]);
+}
+
 let sections=[],items={},tasks={},history={},files={},people=[],resources=[];
 let activeId=null,detailItemId=null,detailTab='overview';
 let editTarget=null,filterStatus='',filterSearch='',addOpen=false;
@@ -360,7 +399,6 @@ const TBADGES={open:'b-open',inprog:'b-inprog',done:'b-done'};
 const TLABELS={open:'Open',inprog:'In progress',done:'Done'};
 
 async function init(){
-  db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   await loadAll();
   document.getElementById('loading').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -370,30 +408,30 @@ async function init(){
 async function loadAll(){
   setStatus('loading','Loading…');
   try{
-    const[{data:secs},{data:ppl},{data:res}]=await Promise.all([
-      db.from('sections').select('*').order('sort_order'),
-      db.from('people').select('*').order('name'),
-      db.from('resources').select('*').order('name'),
+    const[secs,ppl,res]=await Promise.all([
+      sql('select * from sections order by sort_order'),
+      sql('select * from people order by name'),
+      sql('select * from resources order by name'),
     ]);
     sections=secs||[];people=ppl||[];resources=res||[];
     if(!sections.length){await seedSections();return;}
     activeId=sections[0]?.id||null;
     await loadSectionItems(activeId);
-    setStatus('ok','Connected · Supabase · '+new Date().toLocaleTimeString());
+    setStatus('ok','Connected · Neon · '+new Date().toLocaleTimeString());
   }catch(e){setStatus('error','Load error: '+e.message);}
 }
 
 async function loadSectionItems(secId){
   if(!secId)return;
-  const{data}=await db.from('items').select('*').eq('section_id',secId).order('sort_order');
-  items[secId]=data||[];
+  const rows=await sql('select * from items where section_id=$1 order by sort_order',[secId]);
+  items[secId]=rows||[];
 }
 
 async function loadItemDetail(itemId){
-  const[{data:t},{data:h},{data:f}]=await Promise.all([
-    db.from('tasks').select('*').eq('item_id',itemId).order('sort_order'),
-    db.from('history').select('*').eq('item_id',itemId).order('created_at',{ascending:false}),
-    db.from('files').select('*').eq('item_id',itemId).order('created_at'),
+  const[t,h,f]=await Promise.all([
+    sql('select * from tasks where item_id=$1 order by sort_order',[itemId]),
+    sql('select * from history where item_id=$1 order by created_at desc',[itemId]),
+    sql('select * from files where item_id=$1 order by created_at',[itemId]),
   ]);
   tasks[itemId]=t||[];history[itemId]=h||[];files[itemId]=f||[];
 }
@@ -405,8 +443,11 @@ async function seedSections(){
     {name:'Product scale-up',icon:'ti-arrow-up-right',color:'#2dd4bf',progress:true,sort_order:2},
     {name:'Resources',icon:'ti-building',color:'#fbbf24',progress:false,sort_order:3},
   ];
-  const{data}=await db.from('sections').insert(defs).select();
-  sections=data||[];sections.forEach(s=>{items[s.id]=[];});activeId=sections[0]?.id||null;
+  for(const d of defs){
+    const row=await sqlInsert('sections',d);
+    if(row){sections.push(row);items[row.id]=[];}
+  }
+  activeId=sections[0]?.id||null;
 }
 
 function setStatus(state,msg){
@@ -642,12 +683,12 @@ function renderFiles(item){
 
 async function saveScope(val){
   const item=getItem(detailItemId);if(!item)return;
-  item.scope=val;await db.from('items').update({scope:val}).eq('id',detailItemId);
+  item.scope=val;await sqlUpdate('items',{scope:val},'id',detailItemId);
   setStatus('ok','Scope saved · '+new Date().toLocaleTimeString());
 }
 async function saveNotes(val){
   const item=getItem(detailItemId);if(!item)return;
-  item.note=val;await db.from('items').update({note:val}).eq('id',detailItemId);
+  item.note=val;await sqlUpdate('items',{note:val},'id',detailItemId);
   setStatus('ok','Notes saved · '+new Date().toLocaleTimeString());
 }
 
@@ -711,7 +752,7 @@ async function selectTag(type,val,isNew){
   if(isNew){
     const table=type==='people'?'people':'resources';
     const field=type==='people'?{name:val,role:''}:{name:val,category:''};
-    const{data}=await db.from(table).insert(field).select().single();
+    const data=await sqlInsert(table,field);
     if(data){if(type==='people')people.push(data);else resources.push(data);}
   }
   document.getElementById(type==='people'?'tm-people-dropdown':'tm-res-dropdown')?.classList.remove('open');
@@ -733,11 +774,11 @@ async function saveTask(){
   const payload={item_id:detailItemId,description:desc,status:document.getElementById('tm-status').value,due_date:document.getElementById('tm-due').value||null,people_text:tmPeopleTags.join(', '),resources_text:tmResTags.join(', '),sort_order:(tasks[detailItemId]||[]).length};
   setStatus('loading','Saving…');
   if(taskEditId){
-    await db.from('tasks').update(payload).eq('id',taskEditId);
+    await sqlUpdate('tasks',payload,'id',taskEditId);
     const idx=(tasks[detailItemId]||[]).findIndex(t=>t.id===taskEditId);
     if(idx!==-1)tasks[detailItemId][idx]={...tasks[detailItemId][idx],...payload};
   } else {
-    const{data}=await db.from('tasks').insert(payload).select().single();
+    const data=await sqlInsert('tasks',payload);
     if(data)(tasks[detailItemId]=tasks[detailItemId]||[]).push(data);
   }
   setStatus('ok','Saved · '+new Date().toLocaleTimeString());
@@ -746,7 +787,7 @@ async function saveTask(){
 
 async function toggleTask(taskId,checked){
   const status=checked?'done':'open';
-  await db.from('tasks').update({status}).eq('id',taskId);
+  await sqlUpdate('tasks',{status},'id',taskId);
   const t=(tasks[detailItemId]||[]).find(x=>x.id===taskId);
   if(t)t.status=status;
   renderDetailPage();
@@ -755,16 +796,16 @@ async function toggleTask(taskId,checked){
 async function moveToHistory(taskId){
   const t=(tasks[detailItemId]||[]).find(x=>x.id===taskId);if(!t)return;
   const entry=`Task completed: ${t.description}${t.due_date?' (due '+t.due_date+')':''}${t.people_text?' — '+t.people_text:''}`;
-  const{data}=await db.from('history').insert({item_id:detailItemId,entry,entry_type:'task',source_task_id:taskId}).select().single();
+  const data=await sqlInsert('history',{item_id:detailItemId,entry,entry_type:'task',source_task_id:taskId});
   if(data)(history[detailItemId]=history[detailItemId]||[]).unshift(data);
-  await db.from('tasks').delete().eq('id',taskId);
+  await sqlDelete('tasks','id',taskId);
   tasks[detailItemId]=(tasks[detailItemId]||[]).filter(x=>x.id!==taskId);
   renderDetailPage();setStatus('ok','Task archived to history');
 }
 
 async function deleteTask(taskId){
   if(!confirm('Delete this task?'))return;
-  await db.from('tasks').delete().eq('id',taskId);
+  await sqlDelete('tasks','id',taskId);
   tasks[detailItemId]=(tasks[detailItemId]||[]).filter(x=>x.id!==taskId);
   renderDetailPage();
 }
@@ -773,13 +814,13 @@ function openHistModal(){document.getElementById('hm-text').value='';openModal('
 async function saveHistNote(){
   const text=document.getElementById('hm-text').value.trim();
   if(!text){alert('Note is required.');return;}
-  const{data}=await db.from('history').insert({item_id:detailItemId,entry:text,entry_type:'note'}).select().single();
+  const data=await sqlInsert('history',{item_id:detailItemId,entry:text,entry_type:'note'});
   if(data)(history[detailItemId]=history[detailItemId]||[]).unshift(data);
   closeModal('hist-modal');renderDetailPage();setStatus('ok','Note added');
 }
 async function deleteHistory(histId){
   if(!confirm('Delete this history entry?'))return;
-  await db.from('history').delete().eq('id',histId);
+  await sqlDelete('history','id',histId);
   history[detailItemId]=(history[detailItemId]||[]).filter(h=>h.id!==histId);
   renderDetailPage();
 }
@@ -787,14 +828,14 @@ async function deleteHistory(histId){
 async function saveFile(){
   const label=document.getElementById('fm-label').value.trim();const url=document.getElementById('fm-url').value.trim();
   if(!label||!url){alert('Label and URL/path are required.');return;}
-  const{data}=await db.from('files').insert({item_id:detailItemId,label,url,description:document.getElementById('fm-desc').value.trim()}).select().single();
+  const data=await sqlInsert('files',{item_id:detailItemId,label,url,description:document.getElementById('fm-desc').value.trim()});
   if(data)(files[detailItemId]=files[detailItemId]||[]).push(data);
   ['fm-label','fm-url','fm-desc'].forEach(id=>document.getElementById(id).value='');
   closeModal('file-modal');renderDetailPage();setStatus('ok','File link added');
 }
 async function deleteFile(fileId){
   if(!confirm('Remove this file link?'))return;
-  await db.from('files').delete().eq('id',fileId);
+  await sqlDelete('files','id',fileId);
   files[detailItemId]=(files[detailItemId]||[]).filter(f=>f.id!==fileId);
   renderDetailPage();
 }
@@ -819,7 +860,7 @@ async function addRosterItem(){
   const sub=document.getElementById('roster-new-sub').value.trim();
   const table=currentRosterType==='people'?'people':'resources';
   const field=currentRosterType==='people'?{name,role:sub}:{name,category:sub};
-  const{data}=await db.from(table).insert(field).select().single();
+  const data=await sqlInsert(table,field);
   if(data){if(currentRosterType==='people')people.push(data);else resources.push(data);}
   document.getElementById('roster-new-name').value='';document.getElementById('roster-new-sub').value='';
   renderRosterList();
@@ -827,7 +868,7 @@ async function addRosterItem(){
 async function removeRosterItem(id){
   if(!confirm('Remove from roster?'))return;
   const table=currentRosterType==='people'?'people':'resources';
-  await db.from(table).delete().eq('id',id);
+  await sqlDelete(table,'id',id);
   if(currentRosterType==='people')people=people.filter(p=>p.id!==id);
   else resources=resources.filter(r=>r.id!==id);
   renderRosterList();
@@ -843,8 +884,8 @@ async function submitAdd(){
   const prog=document.getElementById('a-progress');
   const item={section_id:activeId,name,sub:document.getElementById('a-sub')?.value.trim()||'',note:document.getElementById('a-note')?.value.trim()||'',status:document.getElementById('a-status')?.value||'active',priority:document.getElementById('a-priority')?.value||'',due_date:document.getElementById('a-due')?.value||null,progress:prog?parseInt(prog.value):0,scope:'',sort_order:(items[activeId]||[]).length};
   setStatus('loading','Saving…');
-  const{data,error}=await db.from('items').insert(item).select().single();
-  if(error){setStatus('error','Save failed');return;}
+  const data=await sqlInsert('items',item);
+  if(!data){setStatus('error','Save failed');return;}
   (items[activeId]=items[activeId]||[]).push(data);
   setStatus('ok','Saved · '+new Date().toLocaleTimeString());
   addOpen=false;renderAll();
@@ -876,7 +917,7 @@ async function saveEdit(){
   const patch={name,sub:document.getElementById('em-sub').value.trim(),note:document.getElementById('em-note').value.trim(),status:document.getElementById('em-status').value,priority:document.getElementById('em-priority').value,due_date:document.getElementById('em-due').value||null};
   if(ep)patch.progress=parseInt(ep.value);
   setStatus('loading','Saving…');
-  await db.from('items').update(patch).eq('id',item_id);
+  await sqlUpdate('items',patch,'id',item_id);
   const arr=items[section_id]||[];const idx=arr.findIndex(i=>i.id===item_id);
   if(idx!==-1)arr[idx]={...arr[idx],...patch};
   setStatus('ok','Saved · '+new Date().toLocaleTimeString());
@@ -892,7 +933,7 @@ async function deleteCurrentEdit(){
   if(!editTarget)return;
   if(!confirm('Delete this entry and all its tasks, history and files?'))return;
   const{section_id,item_id}=editTarget;
-  await db.from('items').delete().eq('id',item_id);
+  await sqlDelete('items','id',item_id);
   items[section_id]=(items[section_id]||[]).filter(i=>i.id!==item_id);
   closeModal('edit-modal');editTarget=null;
   if(detailItemId===item_id)closeDetail();else renderAll();
@@ -901,7 +942,7 @@ async function deleteCurrentEdit(){
 async function confirmDelete(section_id,item_id){
   const e=(items[section_id]||[]).find(i=>i.id===item_id);
   if(!confirm(`Delete "${e?.name}"? This removes all tasks, history and files.`))return;
-  await db.from('items').delete().eq('id',item_id);
+  await sqlDelete('items','id',item_id);
   items[section_id]=(items[section_id]||[]).filter(i=>i.id!==item_id);
   renderAll();
 }
@@ -919,7 +960,7 @@ function renderManageList(){
 async function addSection(){
   const name=document.getElementById('ns-name').value.trim();if(!name){alert('Name is required.');return;}
   const sec={name,icon:document.getElementById('ns-icon').value.trim()||'ti-folder',color:document.getElementById('ns-color').value,progress:document.getElementById('ns-progress').value==='1',sort_order:sections.length};
-  const{data}=await db.from('sections').insert(sec).select().single();
+  const data=await sqlInsert('sections',sec);
   if(data){sections.push(data);items[data.id]=[];}
   document.getElementById('ns-name').value='';document.getElementById('ns-icon').value='';
   renderManageList();renderNav();
@@ -928,7 +969,7 @@ async function removeSection(id){
   const sec=sections.find(s=>s.id===id);
   if(!confirm(`Delete "${sec?.name}" and all its contents?`))return;
   if(activeId===id)activeId=sections.find(s=>s.id!==id)?.id||null;
-  await db.from('sections').delete().eq('id',id);
+  await sqlDelete('sections','id',id);
   sections=sections.filter(s=>s.id!==id);delete items[id];
   renderManageList();renderAll();
 }
@@ -994,7 +1035,8 @@ async function runReport(){
   // Also load tasks for items not yet cached
   const uncachedItemIds=allItems.map(i=>i.id).filter(id=>!tasks[id]);
   if(uncachedItemIds.length){
-    const{data:newTasks}=await db.from('tasks').select('*').in('item_id',uncachedItemIds);
+    const placeholders=uncachedItemIds.map((_,i)=>`$${i+1}`).join(',');
+    const newTasks=await sql(`select * from tasks where item_id in (${placeholders})`,uncachedItemIds);
     if(newTasks){
       newTasks.forEach(t=>{
         (tasks[t.item_id]=tasks[t.item_id]||[]).push(t);
