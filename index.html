@@ -604,37 +604,32 @@ function renderTasksTab(item){
   const tasks=taskCache[item.id]||[];
   const open=tasks.filter(t=>t.status!=='done');
   const done=tasks.filter(t=>t.status==='done');
+  const existingTask=editTaskId?(taskCache[item.id]||[]).find(t=>t.id===editTaskId):null;
   const addForm=addTaskOpen?`<div class="add-form">
     <div class="add-form-title">${editTaskId?'Edit task':'New task'}</div>
-    <div class="form-row"><input id="nt-desc" placeholder="Task description *" style="flex:2" value="${editTaskId?(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.description||'':''}"></div>
+    <div class="form-row"><input id="nt-desc" placeholder="Task description *" style="flex:2" value="${existingTask?.description||''}"></div>
     <div class="form-row">
-      <select id="nt-status">${TASK_STATUSES.map(s=>`<option value="${s.v}"${editTaskId&&(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.status===s.v?' selected':''}>${s.l}</option>`).join('')}</select>
-      <input id="nt-due" type="date" style="width:130px;flex-shrink:0" value="${editTaskId?(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.due_date||'':''}">
-    </div>
-    <div class="add-form-title" style="margin-top:8px">Resources required</div>
-    <div id="nt-resource-chips" class="people-wrap" style="margin-bottom:6px">${newTaskResources.map((r,i)=>`<div class="person-chip">${r}<button type="button" onclick="removeTaskResource(${i})">✕</button></div>`).join('')}</div>
-    <div class="form-row">
-      <select id="nt-resource-select"><option value="">Pick from list…</option>${resources.map(r=>`<option value="${r.name}">${r.name}${r.category?' ('+r.category+')':''}</option>`).join('')}</select>
-      <input id="nt-resource-free" placeholder="Or type a resource">
-      <button class="small-btn" onclick="addTaskResource()">Add</button>
+      <select id="nt-status">${TASK_STATUSES.map(s=>`<option value="${s.v}"${existingTask?.status===s.v?' selected':''}>${s.l}</option>`).join('')}</select>
+      <input id="nt-due" type="date" style="width:130px;flex-shrink:0" value="${existingTask?.due_date||''}">
     </div>
     <div class="add-form-title" style="margin-top:8px">Responsible person(s)</div>
-    <div id="nt-people-chips" class="people-wrap" style="margin-bottom:6px">${newTaskPeople.map((p,i)=>`<div class="person-chip">${p}<button type="button" onclick="removeTaskPerson(${i})">✕</button></div>`).join('')}</div>
-    <div class="form-row">
-      <select id="nt-person-select"><option value="">Pick from roster…</option>${people.map(p=>`<option value="${p.name}">${p.name}${p.role?' ('+p.role+')':''}</option>`).join('')}</select>
-      <input id="nt-person-free" placeholder="Or type a name">
-      <button class="small-btn" onclick="addTaskPerson()">Add</button>
+    <div class="form-row" style="flex-wrap:wrap;gap:6px">
+      <select id="nt-person-select" onchange="appendToField('nt-people-text',this)"><option value="">Pick from roster…</option>${people.map(p=>`<option value="${p.name}">${p.name}${p.role?' ('+p.role+')':''}</option>`).join('')}</select>
     </div>
+    <input id="nt-people-text" class="p-input" placeholder="Names separated by commas" value="${existingTask?.people_text||''}" style="margin-top:6px">
+    <div class="add-form-title" style="margin-top:10px">Resources required</div>
+    <div class="form-row" style="flex-wrap:wrap;gap:6px">
+      <select id="nt-resource-select" onchange="appendToField('nt-resources-text',this)"><option value="">Pick from list…</option>${resources.map(r=>`<option value="${r.name}">${r.name}${r.category?' ('+r.category+')':''}</option>`).join('')}</select>
+    </div>
+    <input id="nt-resources-text" class="p-input" placeholder="Resources separated by commas" value="${existingTask?.resources_text||''}" style="margin-top:6px">
     <div class="form-actions">
-      <button class="small-btn" onclick="addTaskOpen=false;editTaskId=null;newTaskPeople=[];newTaskResources=[];renderPanel()">Cancel</button>
+      <button class="small-btn" onclick="addTaskOpen=false;editTaskId=null;renderPanel()">Cancel</button>
       <button class="save-btn" onclick="submitTask('${item.id}')">${editTaskId?'Save changes':'Save task'}</button>
     </div>
-    <input type="hidden" id="nt-people-hidden" value="${newTaskPeople.join(', ')}">
-    <input type="hidden" id="nt-resources-hidden" value="${newTaskResources.join(', ')}">
   </div>`:'';
   const openRows=open.length?open.map(t=>renderTaskCard(t,item.id)).join(''):'<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No open tasks.</div>';
   const doneRows=done.length?`<div class="p-section-title" style="margin-top:16px">Completed tasks</div>`+done.map(t=>renderTaskCard(t,item.id)).join(''):'';
-  return`<button class="small-btn" style="margin-bottom:12px" onclick="addTaskOpen=true;editTaskId=null;newTaskPeople=[];newTaskResources=[];renderPanel()"><i class="ti ti-plus"></i> New task</button>
+  return`<button class="small-btn" style="margin-bottom:12px" onclick="addTaskOpen=true;editTaskId=null;renderPanel()"><i class="ti ti-plus"></i> New task</button>
     ${addForm}
     <div class="p-section-title">Open tasks</div>
     ${openRows}${doneRows}`;
@@ -725,6 +720,18 @@ function switchTab(tab){
 }
 
 /* ── Task actions ── */
+function appendToField(fieldId, selectEl){
+  const val=selectEl.value.trim();
+  if(!val)return;
+  const field=document.getElementById(fieldId);
+  if(!field)return;
+  const current=field.value.trim();
+  const parts=current?current.split(',').map(s=>s.trim()).filter(Boolean):[];
+  if(!parts.includes(val))parts.push(val);
+  field.value=parts.join(', ');
+  selectEl.value='';
+}
+
 let newTaskPeople=[],newTaskResources=[];
 
 function addTaskPerson(){
@@ -796,9 +803,9 @@ async function submitTask(item_id){
   const desc=(document.getElementById('nt-desc')?.value||'').trim();
   if(!desc){alert('Task description is required.');return;}
 
-  // Read from hidden inputs — survives DOM re-renders
-  const people_text=document.getElementById('nt-people-hidden')?.value||newTaskPeople.join(', ')||'';
-  const resources_text=document.getElementById('nt-resources-hidden')?.value||newTaskResources.join(', ')||'';
+  // Read directly from text inputs — simple and reliable
+  const people_text=(document.getElementById('nt-people-text')?.value||'').trim();
+  const resources_text=(document.getElementById('nt-resources-text')?.value||'').trim();
 
   console.log('Saving task — people:',people_text,'resources:',resources_text);
   const task={
