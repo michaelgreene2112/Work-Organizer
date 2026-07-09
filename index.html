@@ -634,8 +634,8 @@ function renderTaskCard(t,item_id){
   const sl=TASK_STATUSES.find(s=>s.v===t.status)?.l||t.status;
   const today=new Date().toISOString().split('T')[0];
   const dueStr=t.due_date?`<span class="${t.due_date<today&&t.status!=='done'?'':''}"><i class="ti ti-calendar"></i> ${t.due_date}</span>`:'';
-  const resp=t.responsible?`<span><i class="ti ti-user"></i> ${t.responsible}</span>`:'';
-  const res=t.resources?`<span><i class="ti ti-tool"></i> ${t.resources}</span>`:'';
+  const resp=t.people_text?`<span><i class="ti ti-user"></i> ${t.people_text}</span>`:'';
+  const res=t.resources_text?`<span><i class="ti ti-tool"></i> ${t.resources_text}</span>`:'';
   return`<div class="task-card">
     <div class="task-card-header">
       <span class="task-desc">${t.description}</span>
@@ -739,13 +739,13 @@ async function submitTask(item_id){
     item_id,description:desc,
     status:document.getElementById('nt-status')?.value||'open',
     due_date:document.getElementById('nt-due')?.value||null,
-    responsible:newTaskPeople.join(', '),
-    resources:document.getElementById('nt-resources')?.value.trim()||'',
+    people_text:newTaskPeople.join(', '),
+    resources_text:document.getElementById('nt-resources')?.value.trim()||'',
     sort_order:(taskCache[item_id]||[]).length
   };
   if(IS_CONFIGURED){
     const {data}=await db.from('tasks').insert(task).select().single();
-    (taskCache[item_id]=taskCache[item_id]||[]).push(data);
+    if(data)(taskCache[item_id]=taskCache[item_id]||[]).push(data);
   } else {
     (taskCache[item_id]=taskCache[item_id]||[]).push({...task,id:'t-'+Date.now(),created_at:new Date().toISOString()});
   }
@@ -756,7 +756,7 @@ async function submitTask(item_id){
 async function completeTask(item_id,task_id){
   const task=(taskCache[item_id]||[]).find(t=>t.id===task_id);
   if(!task)return;
-  const histEntry={item_id,entry:`Task completed: ${task.description}${task.responsible?' ('+task.responsible+')':''}`,entry_type:'task'};
+  const histEntry={item_id,entry:`Task completed: ${task.description}${task.people_text?' ('+task.people_text+')':''}`,entry_type:'task'};
   if(IS_CONFIGURED){
     await db.from('tasks').update({status:'done',updated_at:new Date().toISOString()}).eq('id',task_id);
     const {data:h}=await db.from('history').insert(histEntry).select().single();
