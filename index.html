@@ -612,21 +612,21 @@ function renderTasksTab(item){
       <input id="nt-due" type="date" style="width:130px;flex-shrink:0" value="${editTaskId?(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.due_date||'':''}">
     </div>
     <div class="add-form-title" style="margin-top:8px">Resources required</div>
+    <div id="nt-resource-chips" class="people-wrap" style="margin-bottom:6px">${newTaskResources.map((r,i)=>`<div class="person-chip">${r}<button type="button" onclick="removeTaskResource(${i})">✕</button></div>`).join('')}</div>
     <div class="form-row">
       <select id="nt-resource-select"><option value="">Pick from roster…</option>${resources.map(r=>`<option value="${r.name}">${r.name}${r.category?' ('+r.category+')':''}</option>`).join('')}</select>
       <input id="nt-resource-free" placeholder="Or type a resource">
       <button class="small-btn" onclick="addTaskResource()">Add</button>
     </div>
-    <div id="nt-resource-chips" class="people-wrap" style="margin-bottom:8px"></div>
     <div class="add-form-title" style="margin-top:8px">Responsible person(s)</div>
-    <div id="nt-people-chips" class="people-wrap" style="margin-bottom:8px"></div>
+    <div id="nt-people-chips" class="people-wrap" style="margin-bottom:6px">${newTaskPeople.map((p,i)=>`<div class="person-chip">${p}<button type="button" onclick="removeTaskPerson(${i})">✕</button></div>`).join('')}</div>
     <div class="form-row">
       <select id="nt-person-select"><option value="">Pick from roster…</option>${people.map(p=>`<option value="${p.name}">${p.name}${p.role?' ('+p.role+')':''}</option>`).join('')}</select>
       <input id="nt-person-free" placeholder="Or type a name">
       <button class="small-btn" onclick="addTaskPerson()">Add</button>
     </div>
     <div class="form-actions">
-      <button class="small-btn" onclick="addTaskOpen=false;editTaskId=null;renderPanel()">Cancel</button>
+      <button class="small-btn" onclick="addTaskOpen=false;editTaskId=null;newTaskPeople=[];newTaskResources=[];renderPanel()">Cancel</button>
       <button class="save-btn" onclick="submitTask('${item.id}')">${editTaskId?'Save changes':'Save task'}</button>
     </div>
   </div>`:'';
@@ -737,7 +737,7 @@ function addTaskPerson(){
 function renderTaskPeopleChips(){
   const wrap=document.getElementById('nt-people-chips');
   if(!wrap)return;
-  wrap.innerHTML=newTaskPeople.map((p,i)=>`<div class="person-chip">${p}<button onclick="removeTaskPerson(${i})">✕</button></div>`).join('');
+  wrap.innerHTML=newTaskPeople.map((p,i)=>`<div class="person-chip">${p}<button type="button" onclick="removeTaskPerson(${i})">✕</button></div>`).join('');
 }
 function removeTaskPerson(i){newTaskPeople.splice(i,1);renderTaskPeopleChips();}
 
@@ -754,7 +754,7 @@ function addTaskResource(){
 function renderTaskResourceChips(){
   const wrap=document.getElementById('nt-resource-chips');
   if(!wrap)return;
-  wrap.innerHTML=newTaskResources.map((r,i)=>`<div class="person-chip">${r}<button onclick="removeTaskResource(${i})">✕</button></div>`).join('');
+  wrap.innerHTML=newTaskResources.map((r,i)=>`<div class="person-chip">${r}<button type="button" onclick="removeTaskResource(${i})">✕</button></div>`).join('');
 }
 function removeTaskResource(i){newTaskResources.splice(i,1);renderTaskResourceChips();}
 
@@ -766,10 +766,6 @@ function openEditTask(item_id,task_id){
   newTaskResources=(t.resources_text||'').split(',').map(s=>s.trim()).filter(Boolean);
   addTaskOpen=true;
   renderPanel();
-  setTimeout(()=>{
-    renderTaskPeopleChips();
-    renderTaskResourceChips();
-  },50);
 }
 
 async function submitTask(item_id){
