@@ -370,13 +370,14 @@ const TBADGES={open:'b-task-open',progress:'b-task-progress',done:'b-task-done',
 const PBADGES={high:'b-high',med:'b-med',low:'b-low'};
 
 let db=null;
-let sections=[],items={},people=[];
+let sections=[],items={},people=[],resources=[];
 let taskCache={},histCache={},fileCache={};
 let activeId=null,activePanelItemId=null,activePanelSectionId=null;
 let activeTab='overview';
 let addOpen=false,editTarget=null;
 let filterStatus='',filterSearch='';
 let addTaskOpen=false,addFileOpen=false;
+let editTaskId=null;
 
 async function init(){
   if(IS_CONFIGURED){
@@ -402,6 +403,8 @@ async function loadData(){
     if(!sections.length) await seedSections();
     const {data:pp}=await db.from('people').select('*').order('name');
     people=pp||[];
+    const {data:rr}=await db.from('resources').select('*').order('name');
+    resources=rr||[];
     activeId=sections[0]?.id||null;
     setStatus('ok','Connected · Supabase · '+new Date().toLocaleTimeString());
   } catch(e){
@@ -602,13 +605,19 @@ function renderTasksTab(item){
   const open=tasks.filter(t=>t.status!=='done');
   const done=tasks.filter(t=>t.status==='done');
   const addForm=addTaskOpen?`<div class="add-form">
-    <div class="add-form-title">New task</div>
-    <div class="form-row"><input id="nt-desc" placeholder="Task description *" style="flex:2"></div>
+    <div class="add-form-title">${editTaskId?'Edit task':'New task'}</div>
+    <div class="form-row"><input id="nt-desc" placeholder="Task description *" style="flex:2" value="${editTaskId?(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.description||'':''}"></div>
     <div class="form-row">
-      <select id="nt-status">${TASK_STATUSES.map(s=>`<option value="${s.v}">${s.l}</option>`).join('')}</select>
-      <input id="nt-due" type="date" style="width:130px;flex-shrink:0">
+      <select id="nt-status">${TASK_STATUSES.map(s=>`<option value="${s.v}"${editTaskId&&(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.status===s.v?' selected':''}>${s.l}</option>`).join('')}</select>
+      <input id="nt-due" type="date" style="width:130px;flex-shrink:0" value="${editTaskId?(taskCache[item.id]||[]).find(t=>t.id===editTaskId)?.due_date||'':''}">
     </div>
-    <div class="form-row"><input id="nt-resources" placeholder="Resources required"></div>
+    <div class="add-form-title" style="margin-top:8px">Resources required</div>
+    <div class="form-row">
+      <select id="nt-resource-select"><option value="">Pick from roster…</option>${resources.map(r=>`<option value="${r.name}">${r.name}${r.category?' ('+r.category+')':''}</option>`).join('')}</select>
+      <input id="nt-resource-free" placeholder="Or type a resource">
+      <button class="small-btn" onclick="addTaskResource()">Add</button>
+    </div>
+    <div id="nt-resource-chips" class="people-wrap" style="margin-bottom:8px"></div>
     <div class="add-form-title" style="margin-top:8px">Responsible person(s)</div>
     <div id="nt-people-chips" class="people-wrap" style="margin-bottom:8px"></div>
     <div class="form-row">
@@ -617,13 +626,13 @@ function renderTasksTab(item){
       <button class="small-btn" onclick="addTaskPerson()">Add</button>
     </div>
     <div class="form-actions">
-      <button class="small-btn" onclick="addTaskOpen=false;renderPanel()">Cancel</button>
-      <button class="save-btn" onclick="submitTask('${item.id}')">Save task</button>
+      <button class="small-btn" onclick="addTaskOpen=false;editTaskId=null;renderPanel()">Cancel</button>
+      <button class="save-btn" onclick="submitTask('${item.id}')">${editTaskId?'Save changes':'Save task'}</button>
     </div>
   </div>`:'';
   const openRows=open.length?open.map(t=>renderTaskCard(t,item.id)).join(''):'<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No open tasks.</div>';
   const doneRows=done.length?`<div class="p-section-title" style="margin-top:16px">Completed tasks</div>`+done.map(t=>renderTaskCard(t,item.id)).join(''):'';
-  return`<button class="small-btn" style="margin-bottom:12px" onclick="addTaskOpen=true;renderPanel()"><i class="ti ti-plus"></i> New task</button>
+  return`<button class="small-btn" style="margin-bottom:12px" onclick="addTaskOpen=true;editTaskId=null;newTaskPeople=[];newTaskResources=[];renderPanel()"><i class="ti ti-plus"></i> New task</button>
     ${addForm}
     <div class="p-section-title">Open tasks</div>
     ${openRows}${doneRows}`;
@@ -644,7 +653,7 @@ function renderTaskCard(t,item_id){
     <div class="task-meta">${[dueStr,resp,res].filter(Boolean).join('')}</div>
     <div class="task-actions">
       ${t.status!=='done'?`<button class="small-btn success" onclick="completeTask('${item_id}','${t.id}')"><i class="ti ti-check"></i> Done → History</button>`:''}
-      ${TASK_STATUSES.filter(s=>s.v!==t.status&&s.v!=='done').map(s=>`<button class="small-btn" onclick="updateTaskStatus('${item_id}','${t.id}','${s.v}')">${s.l}</button>`).join('')}
+      <button class="small-btn" onclick="openEditTask('${item_id}','${t.id}')"><i class="ti ti-edit"></i> Edit</button>
       <button class="small-btn danger" onclick="deleteTask('${item_id}','${t.id}')"><i class="ti ti-trash"></i></button>
     </div>
   </div>`;
@@ -714,7 +723,7 @@ function switchTab(tab){
 }
 
 /* ── Task actions ── */
-let newTaskPeople=[];
+let newTaskPeople=[],newTaskResources=[];
 function addTaskPerson(){
   const sel=document.getElementById('nt-person-select');
   const free=document.getElementById('nt-person-free');
@@ -732,6 +741,37 @@ function renderTaskPeopleChips(){
 }
 function removeTaskPerson(i){newTaskPeople.splice(i,1);renderTaskPeopleChips();}
 
+function addTaskResource(){
+  const sel=document.getElementById('nt-resource-select');
+  const free=document.getElementById('nt-resource-free');
+  const name=(sel?.value||free?.value||'').trim();
+  if(!name)return;
+  if(!newTaskResources.includes(name))newTaskResources.push(name);
+  if(sel)sel.value='';
+  if(free)free.value='';
+  renderTaskResourceChips();
+}
+function renderTaskResourceChips(){
+  const wrap=document.getElementById('nt-resource-chips');
+  if(!wrap)return;
+  wrap.innerHTML=newTaskResources.map((r,i)=>`<div class="person-chip">${r}<button onclick="removeTaskResource(${i})">✕</button></div>`).join('');
+}
+function removeTaskResource(i){newTaskResources.splice(i,1);renderTaskResourceChips();}
+
+function openEditTask(item_id,task_id){
+  const t=(taskCache[item_id]||[]).find(t=>t.id===task_id);
+  if(!t)return;
+  editTaskId=task_id;
+  newTaskPeople=(t.people_text||'').split(',').map(s=>s.trim()).filter(Boolean);
+  newTaskResources=(t.resources_text||'').split(',').map(s=>s.trim()).filter(Boolean);
+  addTaskOpen=true;
+  renderPanel();
+  setTimeout(()=>{
+    renderTaskPeopleChips();
+    renderTaskResourceChips();
+  },50);
+}
+
 async function submitTask(item_id){
   const desc=(document.getElementById('nt-desc')?.value||'').trim();
   if(!desc)return;
@@ -740,16 +780,28 @@ async function submitTask(item_id){
     status:document.getElementById('nt-status')?.value||'open',
     due_date:document.getElementById('nt-due')?.value||null,
     people_text:newTaskPeople.join(', '),
-    resources_text:document.getElementById('nt-resources')?.value.trim()||'',
+    resources_text:newTaskResources.join(', '),
     sort_order:(taskCache[item_id]||[]).length
   };
   if(IS_CONFIGURED){
-    const {data}=await db.from('tasks').insert(task).select().single();
-    if(data)(taskCache[item_id]=taskCache[item_id]||[]).push(data);
+    if(editTaskId){
+      await db.from('tasks').update(task).eq('id',editTaskId);
+      const idx=(taskCache[item_id]||[]).findIndex(t=>t.id===editTaskId);
+      if(idx!==-1)taskCache[item_id][idx]={...taskCache[item_id][idx],...task};
+    } else {
+      const {data}=await db.from('tasks').insert(task).select().single();
+      if(data)(taskCache[item_id]=taskCache[item_id]||[]).push(data);
+    }
   } else {
-    (taskCache[item_id]=taskCache[item_id]||[]).push({...task,id:'t-'+Date.now(),created_at:new Date().toISOString()});
+    if(editTaskId){
+      const idx=(taskCache[item_id]||[]).findIndex(t=>t.id===editTaskId);
+      if(idx!==-1)taskCache[item_id][idx]={...taskCache[item_id][idx],...task};
+    } else {
+      (taskCache[item_id]=taskCache[item_id]||[]).push({...task,id:'t-'+Date.now(),created_at:new Date().toISOString()});
+    }
+    saveLocal();
   }
-  newTaskPeople=[];addTaskOpen=false;
+  newTaskPeople=[];newTaskResources=[];addTaskOpen=false;editTaskId=null;
   renderPanel();
 }
 
