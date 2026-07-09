@@ -629,6 +629,8 @@ function renderTasksTab(item){
       <button class="small-btn" onclick="addTaskOpen=false;editTaskId=null;newTaskPeople=[];newTaskResources=[];renderPanel()">Cancel</button>
       <button class="save-btn" onclick="submitTask('${item.id}')">${editTaskId?'Save changes':'Save task'}</button>
     </div>
+    <input type="hidden" id="nt-people-hidden" value="${newTaskPeople.join(', ')}">
+    <input type="hidden" id="nt-resources-hidden" value="${newTaskResources.join(', ')}">
   </div>`:'';
   const openRows=open.length?open.map(t=>renderTaskCard(t,item.id)).join(''):'<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No open tasks.</div>';
   const doneRows=done.length?`<div class="p-section-title" style="margin-top:16px">Completed tasks</div>`+done.map(t=>renderTaskCard(t,item.id)).join(''):'';
@@ -724,6 +726,7 @@ function switchTab(tab){
 
 /* ── Task actions ── */
 let newTaskPeople=[],newTaskResources=[];
+
 function addTaskPerson(){
   const sel=document.getElementById('nt-person-select');
   const free=document.getElementById('nt-person-free');
@@ -732,6 +735,7 @@ function addTaskPerson(){
   if(!newTaskPeople.includes(name))newTaskPeople.push(name);
   if(sel)sel.value='';
   if(free)free.value='';
+  syncTaskArraysToInputs();
   renderTaskPeopleChips();
 }
 function renderTaskPeopleChips(){
@@ -739,7 +743,7 @@ function renderTaskPeopleChips(){
   if(!wrap)return;
   wrap.innerHTML=newTaskPeople.map((p,i)=>`<div class="person-chip">${p}<button type="button" onclick="removeTaskPerson(${i})">✕</button></div>`).join('');
 }
-function removeTaskPerson(i){newTaskPeople.splice(i,1);renderTaskPeopleChips();}
+function removeTaskPerson(i){newTaskPeople.splice(i,1);syncTaskArraysToInputs();renderTaskPeopleChips();}
 
 function addTaskResource(){
   const sel=document.getElementById('nt-resource-select');
@@ -749,6 +753,7 @@ function addTaskResource(){
   if(!newTaskResources.includes(name))newTaskResources.push(name);
   if(sel)sel.value='';
   if(free)free.value='';
+  syncTaskArraysToInputs();
   renderTaskResourceChips();
 }
 function renderTaskResourceChips(){
@@ -756,7 +761,26 @@ function renderTaskResourceChips(){
   if(!wrap)return;
   wrap.innerHTML=newTaskResources.map((r,i)=>`<div class="person-chip">${r}<button type="button" onclick="removeTaskResource(${i})">✕</button></div>`).join('');
 }
-function removeTaskResource(i){newTaskResources.splice(i,1);renderTaskResourceChips();}
+function removeTaskResource(i){newTaskResources.splice(i,1);syncTaskArraysToInputs();renderTaskResourceChips();}
+
+function syncTaskArraysToInputs(){
+  const pi=document.getElementById('nt-people-hidden');
+  const ri=document.getElementById('nt-resources-hidden');
+  if(pi)pi.value=newTaskPeople.join(', ');
+  if(ri)ri.value=newTaskResources.join(', ');
+}
+
+function readTaskPeople(){
+  // Try hidden input first (most reliable), fall back to array
+  const pi=document.getElementById('nt-people-hidden');
+  if(pi&&pi.value)return pi.value;
+  return newTaskPeople.join(', ');
+}
+function readTaskResources(){
+  const ri=document.getElementById('nt-resources-hidden');
+  if(ri&&ri.value)return ri.value;
+  return newTaskResources.join(', ');
+}
 
 function openEditTask(item_id,task_id){
   const t=(taskCache[item_id]||[]).find(t=>t.id===task_id);
@@ -772,13 +796,9 @@ async function submitTask(item_id){
   const desc=(document.getElementById('nt-desc')?.value||'').trim();
   if(!desc){alert('Task description is required.');return;}
 
-  // Read chips directly from DOM — arrays may be stale after renderPanel
-  const peopleChips=document.getElementById('nt-people-chips');
-  const resourceChips=document.getElementById('nt-resource-chips');
-  const people_text=Array.from(peopleChips?.querySelectorAll('.person-chip')||[])
-    .map(c=>c.childNodes[0].textContent.trim()).filter(Boolean).join(', ');
-  const resources_text=Array.from(resourceChips?.querySelectorAll('.person-chip')||[])
-    .map(c=>c.childNodes[0].textContent.trim()).filter(Boolean).join(', ');
+  // Read from hidden inputs — survives DOM re-renders
+  const people_text=document.getElementById('nt-people-hidden')?.value||newTaskPeople.join(', ')||'';
+  const resources_text=document.getElementById('nt-resources-hidden')?.value||newTaskResources.join(', ')||'';
 
   console.log('Saving task — people:',people_text,'resources:',resources_text);
   const task={
