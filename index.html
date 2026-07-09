@@ -771,8 +771,15 @@ function openEditTask(item_id,task_id){
 async function submitTask(item_id){
   const desc=(document.getElementById('nt-desc')?.value||'').trim();
   if(!desc){alert('Task description is required.');return;}
-  const people_text=newTaskPeople.join(', ');
-  const resources_text=newTaskResources.join(', ');
+
+  // Read chips directly from DOM — arrays may be stale after renderPanel
+  const peopleChips=document.getElementById('nt-people-chips');
+  const resourceChips=document.getElementById('nt-resource-chips');
+  const people_text=Array.from(peopleChips?.querySelectorAll('.person-chip')||[])
+    .map(c=>c.childNodes[0].textContent.trim()).filter(Boolean).join(', ');
+  const resources_text=Array.from(resourceChips?.querySelectorAll('.person-chip')||[])
+    .map(c=>c.childNodes[0].textContent.trim()).filter(Boolean).join(', ');
+
   console.log('Saving task — people:',people_text,'resources:',resources_text);
   const task={
     item_id,description:desc,
